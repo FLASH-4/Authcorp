@@ -50,7 +50,7 @@ export class SecurityManager {
   }
 
   // Generate secure tokens
-  static generateToken(payload: object, expiresIn: string = '24h'): string {
+  static generateToken(payload: object, expiresIn: jwt.SignOptions['expiresIn'] = '24h'): string {
     const secret = requireEnv('JWT_SECRET', JWT_SECRET)
     return jwt.sign(payload, secret, { expiresIn })
   }
@@ -110,7 +110,7 @@ export interface AuditLog {
   userId: string
   action: string
   resource: string
-  details: Record<string, any>
+  details: Record<string, any> | string
   ipAddress?: string
   userAgent?: string
   riskLevel: 'low' | 'medium' | 'high'

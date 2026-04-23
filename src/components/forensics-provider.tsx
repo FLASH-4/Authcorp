@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { dataService } from '@/lib/data-service'
 import { DocumentClassifier, DocumentClassification } from '@/lib/document-classifier'
@@ -85,6 +85,7 @@ type ForensicsAction =
   | { type: 'ADD_DOCUMENT'; payload: DocumentAnalysis }
   | { type: 'UPDATE_DOCUMENT'; payload: { id: string; updates: Partial<DocumentAnalysis> } }
   | { type: 'SET_ACTIVE_DOCUMENT'; payload: DocumentAnalysis | null }
+  | { type: 'HYDRATE_DOCUMENTS'; payload: DocumentAnalysis[] }
   | { type: 'START_ANALYSIS'; payload: string }
   | { type: 'COMPLETE_ANALYSIS'; payload: { id: string; results: AnalysisResults } }
   | { type: 'FAIL_ANALYSIS'; payload: { id: string; error: string } }
@@ -95,6 +96,34 @@ const initialState: ForensicsState = {
   activeDocument: null,
   isAnalyzing: false,
   analysisQueue: [],
+}
+
+// LocalStorage snapshots can be stale or partial, so normalize them before hydrating state.
+const normalizeStoredDocument = (document: any): DocumentAnalysis => ({
+  ...document,
+  uploadedAt: document?.uploadedAt ? new Date(document.uploadedAt) : new Date(),
+  fileSize: Number(document?.fileSize) || 0,
+  progress: Number(document?.progress) || 0,
+  status: document?.status || 'uploading',
+})
+
+const loadStoredDocuments = (): DocumentAnalysis[] => {
+  try {
+    if (typeof window === 'undefined') {
+      return []
+    }
+
+    const stored = localStorage.getItem('authcorp_documents')
+    if (!stored) {
+      return []
+    }
+
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed.map(normalizeStoredDocument) : []
+  } catch (error) {
+    console.error('Error hydrating stored documents:', error)
+    return []
+  }
 }
 
 function forensicsReducer(state: ForensicsState, action: ForensicsAction): ForensicsState {
@@ -119,6 +148,12 @@ function forensicsReducer(state: ForensicsState, action: ForensicsAction): Foren
       return {
         ...state,
         activeDocument: action.payload,
+      }
+
+    case 'HYDRATE_DOCUMENTS':
+      return {
+        ...state,
+        documents: action.payload,
       }
     
     case 'START_ANALYSIS':
@@ -189,11 +224,25 @@ interface ForensicsProviderProps {
 
 export function ForensicsProvider({ children }: ForensicsProviderProps) {
   const [state, dispatch] = useReducer(forensicsReducer, initialState)
+  const [isHydrated, setIsHydrated] = useState(false)
 
-  // Update data service when documents change
   useEffect(() => {
+    // Restore saved documents before syncing the shared data service, otherwise a blank mount can overwrite them.
+    const storedDocuments = loadStoredDocuments()
+    if (storedDocuments.length > 0) {
+      dispatch({ type: 'HYDRATE_DOCUMENTS', payload: storedDocuments })
+    }
+    setIsHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    // Once hydration is done, keep the shared data service aligned with the provider state.
+    if (!isHydrated) {
+      return
+    }
+
     dataService.updateDocumentData(state.documents)
-  }, [state.documents])
+  }, [isHydrated, state.documents])
 
   const uploadDocument = async (file: File): Promise<string> => {
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -284,20 +333,20 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           documentType: classification.type,
           contextAware: true,
           enableBiometric: classification.type !== 'presentation',
-          realTimeAlerts: this.isHighRiskDocument(classification.type)
+          realTimeAlerts: isHighRiskDocument(classification.type)
         }
       )
       
       // INTELLIGENT RESULTS based on document type and context
-      const isHighRisk = this.isHighRiskDocument(classification.type)
+      const isHighRisk = isHighRiskDocument(classification.type)
       const shouldBlock = aiDetectionResult.isAIGenerated && isHighRisk && aiDetectionResult.confidence > 0.8
       
       const mockResults: AnalysisResults = {
         authenticity: {
-          score: this.calculateContextualScore(aiDetectionResult, classification),
+          score: calculateContextualScore(aiDetectionResult, classification),
           confidence: aiDetectionResult.confidence * 100,
-          category: this.determineCategory(aiDetectionResult, classification),
-          reasoning: this.generateContextualReasoning(aiDetectionResult, classification)
+          category: determineCategory(aiDetectionResult, classification),
+          reasoning: generateContextualReasoning(aiDetectionResult, classification)
         },
         forensics: {
           imageForensics: {

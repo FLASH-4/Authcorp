@@ -33,11 +33,12 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
   const { state, uploadDocument, analyzeDocument, setActiveDocument } = useForensics()
   const [dragActive, setDragActive] = useState(false)
 
+  // Let the provider handle the upload first, then kick off analysis in the background.
   const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: any[]) => {
     setDragActive(false)
     
-    // Handle rejected files
     if (rejectedFiles.length > 0) {
+      // Show the rejection reason clearly so file validation feels human, not silent.
       rejectedFiles.forEach((file) => {
         const errors = file.errors.map((e: any) => e.message).join(', ')
         toast.error(`${file.file.name}: ${errors}`)
@@ -49,16 +50,16 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
       try {
         const documentId = await uploadDocument(file)
         
-        // Emit document uploaded event
+        // Broadcast the upload so dashboards and alerts can react without tight coupling.
         window.dispatchEvent(new CustomEvent('document-uploaded', { 
           detail: { documentId, filename: file.name } 
         }))
         
-        // Auto-start analysis after upload with enhanced security
+        // Give the upload a moment to settle before triggering analysis.
         setTimeout(() => {
           analyzeDocument(documentId)
           
-          // ULTRA-SENSITIVE ANALYSIS with immediate threat detection
+          // Keep the demo responsive by simulating the final threat check after analysis starts.
           setTimeout(() => {
             // Simulate ultra-sensitive AI detection
             const isAIGenerated = Math.random() > 0.25 // 75% chance to detect AI for maximum security
@@ -148,19 +149,20 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
   return (
     <div className="space-y-6">
       {/* Upload Area */}
-      <motion.div
+      <div
         {...getRootProps()}
-        className={`
-          relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300
-          ${isDragActive || dragActive
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-105'
-            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
-          }
-        `}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${isDragActive || dragActive
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-105'
+          : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+        }`}
       >
         <input {...getInputProps()} />
+
+        {state.documents.length === 0 && (
+          <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-gray-300">
+            No uploaded documents yet. Files you upload here will appear in this list and stay visible for the current session.
+          </div>
+        )}
         
         <motion.div
           animate={{
@@ -174,7 +176,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
           }`} />
         </motion.div>
         
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+        <h3 className="text-lg font-semibold text-white dark:text-white mb-2">
           {isDragActive ? 'Drop files here' : 'Upload Documents'}
         </h3>
         
@@ -210,7 +212,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
 
       {/* Document List */}
       {state.documents.length > 0 && (

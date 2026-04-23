@@ -42,14 +42,71 @@ interface DashboardProps {
 
 const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#8b5cf6']
 
+const getTimeRangeLabel = (range: string) => {
+  switch (range) {
+    case '24h':
+      return 'Last 24 Hours'
+    case '30d':
+      return 'Last 30 Days'
+    case '90d':
+      return 'Last 90 Days'
+    case '7d':
+    default:
+      return 'Last 7 Days'
+  }
+}
+
+const formatTrendChange = (current: number, previous?: number | null) => {
+  if (previous === undefined || previous === null) {
+    return 'Live'
+  }
+
+  if (current === 0 && previous === 0) {
+    return 'No data'
+  }
+
+  if (previous === 0) {
+    return current === 0 ? '0.0%' : '+100.0%'
+  }
+
+  const delta = ((current - previous) / previous) * 100
+  return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`
+}
+
+const getTrendDirection = (current: number, previous?: number | null) => {
+  if (previous === undefined || previous === null) {
+    return 'up' as const
+  }
+
+  if (current === 0 && previous === 0) {
+    return 'neutral' as const
+  }
+
+  return current >= previous ? 'up' as const : 'down' as const
+}
+
 export function Dashboard({ analysisData }: DashboardProps) {
   const { state } = useForensics()
-  const [timeRange, setTimeRange] = useState('7d')
+  const [timeRange, setTimeRange] = useState('')
   const [realTimeStats, setRealTimeStats] = useState<RealTimeStats | null>(null)
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
   const [trendData, setTrendData] = useState<TrendData[]>([])
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  const getTrendDays = (range: string) => {
+    switch (range) {
+      case '24h':
+        return 1
+      case '30d':
+        return 30
+      case '90d':
+        return 90
+      case '7d':
+      default:
+        return 7
+    }
+  }
 
   // Load real-time data
   useEffect(() => {
@@ -59,7 +116,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
         const [stats, activity, trends, health] = await Promise.all([
           dataService.getRealTimeStats(),
           dataService.getRecentActivity(10),
-          dataService.getTrendData(7),
+          dataService.getTrendData(getTrendDays(timeRange)),
           dataService.getSystemHealth()
         ])
         
@@ -116,43 +173,56 @@ export function Dashboard({ analysisData }: DashboardProps) {
     riskScore: item.riskScore
   }))
 
-  const categoryData = realTimeStats ? [
+  const latestTrend = trendData[trendData.length - 1]
+  const latestTrendTotal = latestTrend
+    ? latestTrend.authentic + latestTrend.tampered + latestTrend.forged + latestTrend.aiGenerated
+    : null
+  const latestTrendAuthenticityRate = latestTrend && latestTrendTotal && latestTrendTotal > 0
+    ? (latestTrend.authentic / latestTrendTotal) * 100
+    : latestTrend ? 0 : null
+  const latestTrendRiskFlags = latestTrend
+    ? latestTrend.tampered + latestTrend.forged + latestTrend.aiGenerated
+    : null
+
+  const categoryData = trendData.length > 0 ? [
     { name: 'Authentic', value: weeklyData.reduce((sum, day) => sum + day.authentic, 0), color: '#10b981' },
     { name: 'Tampered', value: weeklyData.reduce((sum, day) => sum + day.tampered, 0), color: '#ef4444' },
     { name: 'Forged', value: weeklyData.reduce((sum, day) => sum + day.forged, 0), color: '#f59e0b' },
     { name: 'AI Generated', value: weeklyData.reduce((sum, day) => sum + day.aiGenerated, 0), color: '#8b5cf6' },
   ] : []
 
+  const timeRangeLabel = getTimeRangeLabel(timeRange)
+
   const stats = realTimeStats ? [
     {
       title: 'Documents Processed',
       value: realTimeStats.documentsProcessed.toLocaleString(),
-      change: '+12.5%',
-      trend: 'up' as const,
+      change: formatTrendChange(realTimeStats.documentsProcessed, latestTrendTotal),
+      trend: getTrendDirection(realTimeStats.documentsProcessed, latestTrendTotal),
       icon: DocumentTextIcon,
       color: 'blue',
     },
     {
       title: 'Authenticity Rate',
       value: `${realTimeStats.authenticityRate.toFixed(1)}%`,
-      change: '+2.1%',
-      trend: 'up' as const,
+      change: formatTrendChange(realTimeStats.authenticityRate, latestTrendAuthenticityRate),
+      trend: getTrendDirection(realTimeStats.authenticityRate, latestTrendAuthenticityRate),
       icon: ShieldCheckIcon,
       color: 'green',
     },
     {
       title: 'High Risk Flags',
       value: realTimeStats.highRiskFlags.toString(),
-      change: '-8.3%',
-      trend: 'down' as const,
+      change: formatTrendChange(realTimeStats.highRiskFlags, latestTrendRiskFlags),
+      trend: getTrendDirection(realTimeStats.highRiskFlags, latestTrendRiskFlags),
       icon: ExclamationTriangleIcon,
       color: 'red',
     },
     {
       title: 'Avg Processing Time',
       value: `${realTimeStats.avgProcessingTime.toFixed(1)}s`,
-      change: '-15.2%',
-      trend: 'down' as const,
+      change: formatTrendChange(realTimeStats.avgProcessingTime, latestTrend?.avgProcessingTime ?? null),
+      trend: getTrendDirection(realTimeStats.avgProcessingTime, latestTrend?.avgProcessingTime ?? null),
       icon: ClockIcon,
       color: 'purple',
     },
@@ -177,6 +247,28 @@ export function Dashboard({ analysisData }: DashboardProps) {
       default: return 'text-gray-600 bg-gray-100 dark:bg-gray-900/20'
     }
   }
+
+  const engineHealth = systemHealth?.aiEngine ?? (realTimeStats?.systemStatus === 'operational'
+    ? 'online'
+    : realTimeStats?.systemStatus === 'degraded'
+      ? 'degraded'
+      : 'offline')
+  const engineStatusLabel = engineHealth === 'online'
+    ? 'ACTIVE'
+    : engineHealth === 'degraded'
+      ? 'DEGRADED'
+      : 'OFFLINE'
+  const engineStatusClass = engineHealth === 'online'
+    ? 'bg-emerald-500/90 text-white border border-emerald-300/30'
+    : engineHealth === 'degraded'
+      ? 'bg-amber-500/90 text-white border border-amber-300/30'
+      : 'bg-red-500/90 text-white border border-red-300/30'
+  const deepfakeAlertText = realTimeStats
+    ? `🚨 ${realTimeStats.deepfakesDetected} Deepfakes Detected - ${timeRangeLabel}`
+    : '🚨 Live threat telemetry loading...'
+  const engineSubtitle = realTimeStats
+    ? `Monitoring ${realTimeStats.activeAnalyses} active analyses with ${realTimeStats.accuracyRate.toFixed(1)}% detection accuracy`
+    : 'Loading live model telemetry...'
   
   return (
     <div className="space-y-6">
@@ -193,72 +285,81 @@ export function Dashboard({ analysisData }: DashboardProps) {
         
         {/* Mobile-Friendly Deepfake Alert */}
         <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
-          🚨 3 Deepfakes Detected Today
+          {deepfakeAlertText}
         </div>
         
-        <div className="flex items-center space-x-3">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-3 py-2 bg-white/5 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="24h">Last 24 Hours</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-          </select>
+        <div className="flex items-center">
+          <div className="relative">
+            {timeRange === '' && (
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-300">
+                Duration
+              </span>
+            )}
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="min-w-36 px-3 py-2 bg-white/5 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="" disabled>Duration</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
+            </select>
+          </div>
         </div>
       </div>
       
       {/* Deepfake Detection Showcase */}
-      <div className="bg-gradient-to-r from-red-50 via-pink-50 to-purple-50 dark:from-red-900/20 dark:via-pink-900/20 dark:to-purple-900/20 rounded-xl p-4 sm:p-6 border-2 border-red-200 dark:border-red-800">
+      <div className="rounded-xl p-4 sm:p-6 border border-white/10 bg-white/5 dark:bg-gray-800">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-red-900 dark:text-red-100 mb-2">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">
               🤖 AI Deepfake Detection Engine
             </h2>
-            <p className="text-sm text-red-700 dark:text-red-300">
-              Advanced neural networks detecting synthetic content with 98.5% accuracy
+            <p className="text-sm text-gray-300">
+              {engineSubtitle}
             </p>
           </div>
-          <div className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
-            ACTIVE
+          <div className={`px-4 py-2 rounded-lg text-sm font-medium ${engineStatusClass}`}>
+            {engineStatusLabel}
           </div>
         </div>
         
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
            <div className="text-center">
-             <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">
+             <div className="text-xl sm:text-2xl font-bold text-red-400">
                {realTimeStats?.deepfakesDetected || 0}
              </div>
-             <div className="text-xs sm:text-sm text-red-700 dark:text-red-300">Deepfakes Blocked</div>
+             <div className="text-xs sm:text-sm text-gray-300">Deepfakes Blocked</div>
            </div>
            <div className="text-center">
-             <div className="text-xl sm:text-2xl font-bold text-orange-600 dark:text-orange-400">
+             <div className="text-xl sm:text-2xl font-bold text-orange-400">
                {realTimeStats?.faceSwapsDetected || 0}
              </div>
-             <div className="text-xs sm:text-sm text-orange-700 dark:text-orange-300">Face Swaps</div>
+             <div className="text-xs sm:text-sm text-gray-300">Face Swaps</div>
            </div>
            <div className="text-center">
-             <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">
+             <div className="text-xl sm:text-2xl font-bold text-purple-400">
                {realTimeStats?.ganGeneratedDetected || 0}
              </div>
-             <div className="text-xs sm:text-sm text-purple-700 dark:text-purple-300">GAN Generated</div>
+             <div className="text-xs sm:text-sm text-gray-300">GAN Generated</div>
            </div>
            <div className="text-center">
-             <div className="text-xl sm:text-2xl font-bold text-pink-600 dark:text-pink-400">
-               {realTimeStats?.accuracyRate.toFixed(1) || 0}%
+             <div className="text-xl sm:text-2xl font-bold text-pink-400">
+               {realTimeStats?.accuracyRate?.toFixed(1) ?? '0.0'}%
              </div>
-             <div className="text-xs sm:text-sm text-pink-700 dark:text-pink-300">Accuracy Rate</div>
+             <div className="text-xs sm:text-sm text-gray-300">Accuracy Rate</div>
            </div>
          </div>
       </div>
       
       {/* Mobile-Optimized Stats Grid */}
-      <div className="mobile-grid gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {stats.map((stat, index) => {
           const Icon = stat.icon
           const TrendIcon = stat.trend === 'up' ? ArrowTrendingUpIcon : ArrowTrendingDownIcon
+          const isNeutralChange = stat.change === 'Live' || stat.change === 'No data'
           
           return (
             <motion.div
@@ -273,9 +374,9 @@ export function Dashboard({ analysisData }: DashboardProps) {
                   <Icon className={`w-6 h-6 text-${stat.color}-600 dark:text-${stat.color}-400`} />
                 </div>
                 <div className={`flex items-center space-x-1 text-sm ${
-                  stat.trend === 'up' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                  isNeutralChange ? 'text-gray-400 dark:text-gray-500' : stat.trend === 'up' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                 }`}>
-                  <TrendIcon className="w-4 h-4" />
+                  {isNeutralChange ? <span className="w-4 h-4" /> : <TrendIcon className="w-4 h-4" />}
                   <span>{stat.change}</span>
                 </div>
               </div>
@@ -302,7 +403,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
           className="bg-white/5 dark:bg-gray-800 rounded-xl p-6 border border-white/10"
         >
           <h3 className="text-lg font-semibold text-white mb-4">
-            Weekly Analysis Results
+            Analysis Results ({timeRangeLabel})
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={weeklyData}>
@@ -332,7 +433,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
           className="bg-white/5 dark:bg-gray-800 rounded-xl p-6 border border-white/10"
         >
           <h3 className="text-lg font-semibold text-white mb-4">
-            Risk Score Trend (24h)
+            Risk Score Trend ({timeRangeLabel})
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={riskTrendData}>
@@ -368,7 +469,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
           className="bg-white/5 dark:bg-gray-800 rounded-xl p-6 border border-white/10"
         >
           <h3 className="text-lg font-semibold text-white mb-4">
-            Document Categories
+            Document Categories ({timeRangeLabel})
           </h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
@@ -387,7 +488,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
               </Pie>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  backgroundColor: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   color: 'white',

@@ -8,6 +8,7 @@ interface User {
   id: string
   email: string
   name: string
+  avatar?: string
   role: 'admin' | 'investigator' | 'analyst' | 'viewer'
   permissions: string[]
   organization?: string
@@ -35,6 +36,8 @@ export function useAuth() {
 interface AuthProviderProps {
   children: ReactNode
 }
+
+const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
@@ -70,6 +73,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true)
       const response = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -96,11 +100,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loginWithGoogle = async () => {
     try {
       setLoading(true)
+
+      if (!googleClientId) {
+        throw new Error('Google sign-in is not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID.')
+      }
       
       // Initialize Google OAuth
       if (typeof window !== 'undefined' && window.google) {
         window.google.accounts.oauth2.initTokenClient({
-          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
+          client_id: googleClientId,
           scope: 'email profile',
           callback: async (response: any) => {
             try {
@@ -133,7 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }).requestAccessToken()
       } else {
         // Fallback: redirect to Google OAuth
-        const googleAuthUrl = `https://accounts.google.com/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/google/callback')}&response_type=code&scope=email profile`
+        const googleAuthUrl = `https://accounts.google.com/oauth/authorize?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/google/callback')}&response_type=code&scope=email profile`
         window.location.href = googleAuthUrl
       }
     } catch (error) {

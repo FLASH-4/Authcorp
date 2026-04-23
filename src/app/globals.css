@@ -2,15 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply text-gray-900 dark:text-gray-100;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
-
-/* Cybersecurity landing theme tokens */
 :root {
+  --page-bg: #0a0f1f;
+  --page-fg: 249 250 251;
   --cyber-bg-start: #070b13;
   --cyber-bg-mid: #0a1229;
   --cyber-bg-end: #0a0f1f;
@@ -22,99 +16,139 @@
   --glass-border: rgba(255, 255, 255, 0.12);
 }
 
-.cyber-bg {
-  background:
-    radial-gradient(800px circle at 12% 10%, rgba(0, 255, 240, 0.06), transparent 40%),
-    radial-gradient(900px circle at 80% 15%, rgba(255, 0, 234, 0.05), transparent 42%),
-    linear-gradient(135deg, var(--cyber-bg-start), var(--cyber-bg-mid) 50%, var(--cyber-bg-end));
-  min-height: 100vh;
-  position: relative;
+.light {
+  --page-bg: #0a0f1f;
+  --page-fg: 249 250 251;
+  --cyber-bg-start: #ffffff;
+  --cyber-bg-mid: #f8fafc;
+  --cyber-bg-end: #f1f5f9;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(15, 23, 42, 0.12);
 }
 
-.cyber-bg::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-  background-size: 24px 24px, 24px 24px;
-  pointer-events: none;
-  z-index: 0;
-}
+@layer base {
+  html,
+  body {
+    min-height: 100%;
+    background-color: var(--page-bg);
+    color: rgb(var(--page-fg));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 
-.neon-text {
-  color: var(--neon-cyan);
-}
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 
-.glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  box-shadow: 0 0 40px rgba(56, 189, 248, 0.15);
-}
-
-.neon-border {
-  box-shadow:
-    0 0 0 1px rgba(0, 255, 240, 0.18),
-    inset 0 0 20px rgba(0, 255, 240, 0.1),
-    0 0 24px rgba(0, 255, 240, 0.18);
-}
-
-.btn-cyber {
-  @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all;
-  color: #0b132b;
-  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-blue));
-}
-
-.btn-cyber:hover {
-  filter: brightness(1.05);
+  * {
+    box-sizing: border-box;
+  }
 }
 
 @layer components {
-  /* Mobile-first responsive utilities */
   .mobile-container {
     @apply px-4 sm:px-6 lg:px-8;
   }
-  
+
   .mobile-grid {
-    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
   }
-  
+
   .mobile-text {
     @apply text-sm sm:text-base lg:text-lg;
   }
-  
+
   .mobile-button {
-    @apply px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base;
+    @apply px-3 py-2 text-sm sm:px-4 sm:py-2 sm:text-base;
   }
-  
+
   .mobile-card {
-    @apply p-4 sm:p-6 rounded-lg sm:rounded-xl;
+    @apply rounded-lg p-4 sm:rounded-xl sm:p-6;
   }
-  
-  /* Custom scrollbar */
+
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(56, 189, 248, 0.15);
+  }
+
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-gray-200/50 dark:bg-white/10 dark:border-white/20;
+  }
+
+  .glass-dark {
+    @apply bg-gray-900/80 backdrop-blur-md border border-gray-700/50 dark:bg-black/10 dark:border-white/10;
+  }
+
+  .neon-border {
+    box-shadow:
+      0 0 0 1px rgba(0, 255, 240, 0.18),
+      inset 0 0 20px rgba(0, 255, 240, 0.1),
+      0 0 24px rgba(0, 255, 240, 0.18);
+  }
+
+  .neon-text {
+    color: var(--neon-cyan);
+  }
+
+  .btn-cyber {
+    @apply inline-flex items-center gap-2 rounded-lg px-5 py-2.5 font-medium transition-all;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+  }
+
+  .btn-cyber:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .btn-primary {
+    @apply rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors duration-200 hover:bg-blue-700;
+  }
+
+  .btn-secondary {
+    @apply rounded-lg bg-gray-200 px-4 py-2 font-medium text-gray-800 transition-colors duration-200 hover:bg-gray-300;
+  }
+
+  .btn-danger {
+    @apply rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors duration-200 hover:bg-red-700;
+  }
+
+  .card {
+    @apply rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800;
+  }
+
+  .card-forensic {
+    @apply card border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(56,189,248,0.12)];
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-track {
     @apply bg-gray-100 dark:bg-gray-800;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+    @apply rounded-full bg-gray-300 dark:bg-gray-600;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-400 dark:bg-gray-500;
   }
 
-  /* Forensic scan animation */
   .forensic-scan {
     position: relative;
     overflow: hidden;
   }
-  
+
   .forensic-scan::before {
     content: '';
     position: absolute;
@@ -122,136 +156,20 @@
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(0, 255, 136, 0.3),
-      transparent
-    );
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.3), transparent);
     animation: scan 2s linear infinite;
   }
 
-  /* Glow effects */
   .glow-authentic {
     box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
   }
-  
+
   .glow-tamper {
     box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
   }
-  
+
   .glow-suspicious {
     box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
-  }
-
-  /* Glass morphism */
-  .glass {
-    @apply bg-white/80 dark:bg-white/10 backdrop-blur-md border border-gray-200/50 dark:border-white/20;
-  }
-  
-  .glass-dark {
-    @apply bg-gray-900/80 dark:bg-black/10 backdrop-blur-md border border-gray-700/50 dark:border-white/10;
-  }
-  
-  /* Enhanced Light and Dark Mode Styles */
-  :root {
-    --background: 249 250 251;
-    --foreground: 17 24 39;
-    --card: 255 255 255;
-    --card-foreground: 17 24 39;
-    --primary: 37 99 235;
-    --primary-foreground: 255 255 255;
-    --secondary: 243 244 246;
-    --secondary-foreground: 17 24 39;
-    --muted: 243 244 246;
-    --muted-foreground: 107 114 128;
-    --accent: 243 244 246;
-    --accent-foreground: 17 24 39;
-    --border: 229 231 235;
-    --input: 229 231 235;
-  }
-  
-  .dark {
-    --background: 17 24 39;
-    --foreground: 249 250 251;
-    --card: 31 41 55;
-    --card-foreground: 249 250 251;
-    --primary: 59 130 246;
-    --primary-foreground: 17 24 39;
-    --secondary: 55 65 81;
-    --secondary-foreground: 249 250 251;
-    --muted: 55 65 81;
-    --muted-foreground: 156 163 175;
-    --accent: 55 65 81;
-    --accent-foreground: 249 250 251;
-    --border: 75 85 99;
-    --input: 75 85 99;
-  }
-  
-  /* Light mode specific overrides */
-  .light {
-    background-color: rgb(var(--background));
-    color: rgb(var(--foreground));
-  }
-  
-  .light .bg-background {
-    background-color: rgb(var(--background));
-  }
-  
-  .light .bg-card {
-    background-color: rgb(var(--card));
-  }
-  
-  .light .text-foreground {
-    color: rgb(var(--foreground));
-  }
-  
-  .light .border-border {
-    border-color: rgb(var(--border));
-  }
-  
-  /* Dark mode specific overrides */
-  .dark {
-    background-color: rgb(var(--background));
-    color: rgb(var(--foreground));
-  }
-  
-  .dark .bg-background {
-    background-color: rgb(var(--background));
-  }
-  
-  .dark .bg-card {
-    background-color: rgb(var(--card));
-  }
-  
-  .dark .text-foreground {
-    color: rgb(var(--foreground));
-  }
-  
-  .dark .border-border {
-    border-color: rgb(var(--border));
-  }
-
-  /* Button variants */
-  .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
-  }
-  
-  .btn-secondary {
-    @apply bg-secondary-200 hover:bg-secondary-300 text-secondary-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
-  }
-  
-  .btn-danger {
-    @apply bg-danger-600 hover:bg-danger-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
-  }
-
-  /* Card styles */
-  .card {
-    @apply bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700;
-  }
-  
-  .card-forensic {
-    @apply card border-2 border-forensic-scan/30 shadow-forensic;
   }
 }
 
@@ -259,13 +177,68 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .cyber-bg {
+    background-color: var(--page-bg);
+    background:
+      radial-gradient(800px circle at 12% 10%, rgba(0, 255, 240, 0.06), transparent 40%),
+      radial-gradient(900px circle at 80% 15%, rgba(255, 0, 234, 0.05), transparent 42%),
+      linear-gradient(180deg, var(--cyber-bg-end), var(--cyber-bg-end));
+    min-height: 100dvh;
+    position: relative;
+    isolation: isolate;
+  }
+
+  .light .cyber-bg {
+    background-color: #ffffff;
+    background:
+      radial-gradient(800px circle at 12% 10%, rgba(56, 189, 248, 0.04), transparent 40%),
+      radial-gradient(900px circle at 80% 15%, rgba(255, 0, 234, 0.02), transparent 42%),
+      linear-gradient(180deg, #ffffff, #f8fafc);
+  }
+
+  .cyber-bg::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 24px 24px, 24px 24px;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .light .cyber-bg::before {
+    background-image: linear-gradient(rgba(15, 23, 42, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
+  }
+
+  .dark {
+    background-color: var(--cyber-bg-end);
+    color: rgb(var(--page-fg));
+  }
+
+  .dark .bg-background {
+    background-color: rgb(var(--background));
+  }
+
+  .dark .bg-card {
+    background-color: rgb(var(--card));
+  }
+
+  .dark .text-foreground {
+    color: rgb(var(--foreground));
+  }
+
+  .dark .border-border {
+    border-color: rgb(var(--border));
+  }
 }
 
-/* Custom animations for forensic effects */
 @keyframes pulse-forensic {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -275,8 +248,19 @@
   0% {
     transform: translateY(-100vh);
   }
+
   100% {
     transform: translateY(100vh);
+  }
+}
+
+@keyframes scan {
+  0% {
+    left: -100%;
+  }
+
+  100% {
+    left: 100%;
   }
 }
 

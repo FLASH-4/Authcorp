@@ -296,6 +296,7 @@ export class AIDetectionEngine {
     // ADAPTIVE THRESHOLD based on document type and context
     const detectionThreshold = this.getAdaptiveThreshold(documentType, contextAware)
     const isAIGenerated = overallConfidence > detectionThreshold
+    const ultraSensitive = contextAware && isHighRiskDocument
 
     // SMART ALERT SYSTEM - only alert on genuine threats
     if (realTimeAlerts && isAIGenerated && this.isGenuineThreat(overallConfidence, documentType)) {
@@ -395,7 +396,7 @@ export class AIDetectionEngine {
     return confidence > threshold + 10 // Only alert if significantly above threshold
   }
 
-  private static getContextualEvidence(documentType?: string, confidence: number): string[] {
+  private static getContextualEvidence(documentType: string | undefined, confidence: number): string[] {
     const baseEvidence = [
       'Frequency domain analysis completed',
       'Pattern recognition assessment performed'

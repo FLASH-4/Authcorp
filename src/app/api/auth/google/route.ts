@@ -5,6 +5,7 @@ import { googleTokenSchema, validate } from '@/lib/validation'
 // Google OAuth endpoint
 export async function POST(request: NextRequest) {
   try {
+    const isProduction = process.env.NODE_ENV === 'production'
     const body = await request.json()
     const validated = validate(googleTokenSchema, body)
     const clientIp = request.headers.get('x-forwarded-for') || 'unknown'
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true, user })
     response.cookies.set('authcorp_session', jwtToken, {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
       sameSite: 'strict',
       path: '/',
       maxAge: 60 * 60 * 24,

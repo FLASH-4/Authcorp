@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from functools import wraps
 import hashlib
-import secrets
 
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -32,14 +31,32 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="AuthCorp Auth Service", version="1.0.0")
 
 # Security configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+def require_env(*names: str, default: Optional[str] = None) -> str:
+    for name in names:
+        value = os.getenv(name)
+        if value and value.strip():
+            return value.strip()
+
+    if default is not None:
+                return default
+
+    raise RuntimeError(f"Missing required environment variable: one of {', '.join(names)}")
+
+
+SECRET_KEY = require_env("JWT_SECRET", "JWT_SECRET_KEY")
+if len(SECRET_KEY) < 32:
+    raise RuntimeError("JWT_SECRET must be at least 32 characters long")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
+ENCRYPTION_KEY = require_env("ENCRYPTION_KEY")
+try:
+    Fernet(ENCRYPTION_KEY.encode())
+except Exception as exc:
+    raise RuntimeError("ENCRYPTION_KEY must be a valid Fernet key") from exc
 
 # Redis configuration
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = require_env("REDIS_URL", default="redis://localhost:6379")
 redis_client = None
 
 # Encryption

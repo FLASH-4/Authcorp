@@ -247,7 +247,6 @@ export class AnalysisRepository {
     const key = QueryCache.key('analysis:recent', { limit: safeLimit })
     const cached = queryCache.get<AnalysisRecord[]>(key)
     if (cached) return cached
-    console.log('Getting recent analyses, limit:', safeLimit)
     const result: AnalysisRecord[] = []
     queryCache.set(key, result, 10_000)
     return result

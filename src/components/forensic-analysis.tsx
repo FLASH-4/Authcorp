@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   EyeIcon,
@@ -28,13 +28,36 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const [selectedDocument, setSelectedDocument] = useState<any>(null)
   const analysisResults = data || selectedDocument?.results
 
-  const modes = [
+  const completedDocuments = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
+
+  const modes: Array<{ id: AnalysisMode; name: string; icon: typeof EyeIcon }> = [
     { id: 'overview', name: 'Overview', icon: EyeIcon },
     { id: 'heatmap', name: 'Heatmap', icon: ChartBarIcon },
     { id: 'metadata', name: 'Metadata', icon: InformationCircleIcon },
     { id: 'text', name: 'Text Analysis', icon: DocumentTextIcon },
     { id: 'comparison', name: 'Comparison', icon: AdjustmentsHorizontalIcon },
   ]
+
+  useEffect(() => {
+    if (!modes.some((mode) => mode.id === activeMode)) {
+      setActiveMode('overview')
+    }
+  }, [activeMode])
+
+  const isModeAvailable = (mode: AnalysisMode) => {
+    switch (mode) {
+      case 'heatmap':
+        return Boolean(analysisResults?.heatmap || selectedDocument?.results?.heatmap)
+      case 'metadata':
+        return Boolean(analysisResults?.forensics?.metadataAnalysis || selectedDocument?.results?.forensics?.metadataAnalysis)
+      case 'text':
+        return Boolean(analysisResults?.forensics?.textAnalysis || selectedDocument?.results?.forensics?.textAnalysis)
+      case 'comparison':
+        return completedDocuments.length > 1
+      default:
+        return true
+    }
+  }
 
   const getAuthenticityIcon = (category: string) => {
     switch (category) {
@@ -160,7 +183,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       return (
         <div className="text-center py-12">
           <DocumentTextIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-medium text-white dark:text-white mb-2">
             No Analysis Results
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
@@ -214,7 +237,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
           <div className="mt-6">
             <h4 className="font-medium text-gray-900 dark:text-white mb-3">Analysis Reasoning</h4>
             <ul className="space-y-2">
-              {results.authenticity.reasoning.map((reason, index) => (
+              {results.authenticity.reasoning.map((reason: string, index: number) => (
                 <li key={index} className="flex items-start space-x-2">
                   <span className="text-blue-600 dark:text-blue-400 mt-1">•</span>
                   <span className="text-gray-700 dark:text-gray-300 text-sm">{reason}</span>
@@ -232,7 +255,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       return (
         <div className="text-center py-12">
           <ChartBarIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-medium text-white dark:text-white mb-2">
             No Heatmap Data
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
@@ -265,6 +288,149 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
     )
   }
 
+  const renderTextAnalysis = () => {
+    const results = analysisResults || selectedDocument?.results
+    const textAnalysis = results?.forensics?.textAnalysis
+
+    if (!textAnalysis) {
+      return (
+        <div className="text-center py-12">
+          <DocumentTextIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-white dark:text-white mb-2">
+            No Text Analysis Available
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            This document does not contain extracted text, font, or signature data yet.
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+        >
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Text Analysis
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3">Extracted Text</h4>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 p-4 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-72 overflow-auto">
+                {textAnalysis.extractedText || 'No extracted text available.'}
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Font Consistency</h4>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {textAnalysis.fontConsistency.toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Alignment Issues</h4>
+                {textAnalysis.alignmentIssues?.length ? (
+                  <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    {textAnalysis.alignmentIssues.map((issue: string, index: number) => (
+                      <li key={index} className="flex items-start space-x-2">
+                        <span className="text-yellow-500 mt-1">•</span>
+                        <span>{issue}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No alignment anomalies detected.</p>
+                )}
+              </div>
+              {textAnalysis.signatureVerification && (
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Signature Verification</h4>
+                  <p className={`text-sm font-semibold ${textAnalysis.signatureVerification.isValid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {textAnalysis.signatureVerification.isValid ? 'Valid signature detected' : 'Signature mismatch detected'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Confidence: {textAnalysis.signatureVerification.confidence.toFixed(1)}%
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  const renderComparison = () => {
+    const completed = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
+    if (completed.length < 2 || !selectedDocument?.results) {
+      return (
+        <div className="text-center py-12">
+          <AdjustmentsHorizontalIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-white dark:text-white mb-2">
+            Comparison Unavailable
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Upload and complete at least two documents to compare their analysis results.
+          </p>
+        </div>
+      )
+    }
+
+    const selectedScore = selectedDocument.results.authenticity.score
+    const selectedConfidence = selectedDocument.results.authenticity.confidence
+    const peerDocuments = completed.filter((doc) => doc.id !== selectedDocument.id && Boolean(doc.results))
+    const peerAverageScore = peerDocuments.reduce((sum, doc) => sum + doc.results!.authenticity.score, 0) / peerDocuments.length
+    const peerAverageConfidence = peerDocuments.reduce((sum, doc) => sum + doc.results!.authenticity.confidence, 0) / peerDocuments.length
+
+    return (
+      <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+        >
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Document Comparison
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Selected Document</h4>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-1">{selectedDocument.filename}</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{selectedScore.toFixed(1)}%</p>
+              <p className="text-xs text-blue-600 dark:text-blue-300">Confidence: {selectedConfidence.toFixed(1)}%</p>
+            </div>
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-4">
+              <h4 className="font-medium text-gray-900 dark:text-white mb-2">Peer Average</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">{peerDocuments.length} other completed document{peerDocuments.length === 1 ? '' : 's'}</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{peerAverageScore.toFixed(1)}%</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Confidence: {peerAverageConfidence.toFixed(1)}%</p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3">Compared Documents</h4>
+            <div className="space-y-3">
+              {peerDocuments.slice(0, 4).map((doc) => (
+                <div key={doc.id} className="flex items-center justify-between rounded-lg bg-white/5 dark:bg-gray-700/40 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">{doc.filename}</p>
+                    <p className="text-xs text-gray-400 capitalize">{doc.results!.authenticity.category.replace('_', ' ')}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-white">{doc.results!.authenticity.score.toFixed(1)}%</p>
+                    <p className="text-xs text-gray-400">{doc.results!.authenticity.confidence.toFixed(1)}% confidence</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
   const renderMetadata = () => {
     const results = analysisResults || selectedDocument?.results
     
@@ -272,7 +438,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       return (
         <div className="text-center py-12">
           <InformationCircleIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-medium text-white dark:text-white mb-2">
             No Metadata Available
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
@@ -299,7 +465,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
                 {Object.entries(results.forensics.metadataAnalysis.exifData).map(([key, value]) => (
                   <div key={key} className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">{key}:</span>
-                    <span className="text-gray-900 dark:text-white font-mono text-sm">{value}</span>
+                    <span className="text-gray-900 dark:text-white font-mono text-sm">{String(value)}</span>
                   </div>
                 ))}
               </div>
@@ -326,8 +492,8 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       case 'overview': return renderOverview()
       case 'heatmap': return renderHeatmap()
       case 'metadata': return renderMetadata()
-      case 'text': return renderOverview()
-      case 'comparison': return renderOverview()
+      case 'text': return renderTextAnalysis()
+      case 'comparison': return renderComparison()
       default: return renderOverview()
     }
   }
@@ -336,7 +502,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-white dark:text-white">
             Forensic Analysis
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
@@ -366,14 +532,19 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
         {modes.map((mode) => {
           const Icon = mode.icon
+          const available = isModeAvailable(mode.id)
           return (
             <button
               key={mode.id}
               onClick={() => setActiveMode(mode.id as AnalysisMode)}
+              title={!available && mode.id !== 'overview' ? 'No data available yet for this view' : undefined}
+              aria-disabled={!available && mode.id !== 'overview'}
               className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 activeMode === mode.id
                   ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  : available
+                    ? 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400'
               }`}
             >
               <Icon className="w-4 h-4" />

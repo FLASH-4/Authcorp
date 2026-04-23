@@ -1,10 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { ThemeProvider as NextThemesProvider } from 'next-themes'
-import { type ThemeProviderProps } from 'next-themes/dist/types'
+import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from 'next-themes'
 
-interface CustomThemeProviderProps extends Omit<ThemeProviderProps, 'attribute' | 'defaultTheme'> {
+interface CustomThemeProviderProps extends ThemeProviderProps {
   children: React.ReactNode
 }
 
@@ -24,12 +23,10 @@ export function ThemeProvider({ children, ...props }: CustomThemeProviderProps) 
       disableTransitionOnChange={false}
       storageKey="authcorp-theme"
       themes={['light', 'dark']}
-      forcedTheme={!mounted ? 'dark' : undefined}
+      forcedTheme="dark"
       {...props}
     >
-      <div className={!mounted ? 'dark' : ''}>
-        {children}
-      </div>
+      {children}
     </NextThemesProvider>
   )
 }

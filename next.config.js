@@ -5,6 +5,10 @@ const nextConfig = {
     formats: ['image/webp', 'image/avif'],
   },
   webpack: (config, { isServer }) => {
+    if (process.env.NODE_ENV === 'development') {
+      config.cache = { type: 'memory' }
+    }
+
     // Handle PDF.js worker
     config.resolve.alias = {
       ...config.resolve.alias,

@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
 import { SecurityManager, AuditLogger } from '@/lib/security'
+import { generateAssistantResponse, type AssistantContextSnapshot } from '@/lib/assistant-engine'
+import { getAssistantRuntimeStatus } from '@/lib/assistant-runtime'
 
 const askSchema = z.object({
   prompt: z.string().min(1).max(2000),
-  context: z.string().optional()
+  context: z.any().optional()
 })
 
 export async function POST(req: NextRequest) {
@@ -21,19 +23,34 @@ export async function POST(req: NextRequest) {
     }
 
     const { prompt, context } = parsed.data
-
-    // Minimal assistant stub response
-    const reply = `I understand your request: "${prompt}". This is a stubbed response. Context: ${context || 'none'}.`
+    const assistantContext = (context || {}) as AssistantContextSnapshot
+    const runtimeStatus = getAssistantRuntimeStatus()
+    const assistantResponse = generateAssistantResponse(prompt, assistantContext)
 
     await AuditLogger.logAction({
       userId: user.userId || 'unknown',
       action: 'assistant_query',
       resource: 'assistant',
-      details: { promptLength: prompt.length },
+      details: {
+        promptLength: prompt.length,
+        topic: assistantResponse.topic,
+        providerMode: runtimeStatus.mode,
+        hasDocumentContext: Boolean(assistantContext.document),
+      },
       riskLevel: 'low'
     })
 
-    return NextResponse.json({ reply })
+    return NextResponse.json({
+      reply: assistantResponse.reply,
+      topic: assistantResponse.topic,
+      confidence: assistantResponse.confidence,
+      followUps: assistantResponse.followUps,
+      summary: assistantResponse.summary,
+      providerMode: runtimeStatus.mode,
+      providerLabel: runtimeStatus.providerLabel,
+      providerReady: runtimeStatus.ready,
+      providerMessage: runtimeStatus.message,
+    })
   } catch (err: any) {
     return NextResponse.json({ error: 'Assistant error', message: String(err) }, { status: 500 })
   }

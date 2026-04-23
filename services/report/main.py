@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -27,7 +28,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Report Generator Service", version="1.0.0")
 
 # Redis connection
-redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 class ReportRequest(BaseModel):
     upload_id: str

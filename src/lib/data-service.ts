@@ -35,6 +35,7 @@ export interface TrendData {
   forged: number
   aiGenerated: number
   riskScore: number
+  avgProcessingTime: number
 }
 
 export interface SystemHealth {
@@ -75,24 +76,25 @@ class DataService {
       const deepfakeDocs = completedDocs.filter(doc => doc.results?.authenticity?.category === 'ai-generated')
       const tamperedDocs = completedDocs.filter(doc => doc.results?.authenticity?.category === 'tampered')
       const analyzingDocs = documentsData.filter(doc => doc.status === 'analyzing')
+      const hasCompletedDocuments = completedDocs.length > 0
       
       // Calculate DYNAMIC metrics that change with each call
       const now = new Date()
       const timeVariation = Math.sin(Date.now() / 10000) * 5 // Subtle time-based variation
       
       const stats: RealTimeStats = {
-        documentsProcessed: documentsData.length + Math.floor(timeVariation),
-        authenticityRate: completedDocs.length > 0 ? 
-          Math.max(0, Math.min(100, (authenticDocs.length / completedDocs.length) * 100 + timeVariation)) : 
-          85 + Math.random() * 10, // Dynamic baseline when no docs
-        highRiskFlags: tamperedDocs.length + deepfakeDocs.length + Math.floor(Math.random() * 2),
+        documentsProcessed: documentsData.length,
+        authenticityRate: hasCompletedDocuments
+          ? Math.max(0, Math.min(100, (authenticDocs.length / completedDocs.length) * 100 + timeVariation))
+          : 0,
+        highRiskFlags: tamperedDocs.length + deepfakeDocs.length,
         avgProcessingTime: this.calculateDynamicProcessingTime(),
-        deepfakesDetected: deepfakeDocs.length + Math.floor(Math.random() * 1),
-        faceSwapsDetected: Math.floor((deepfakeDocs.length + Math.random()) * 0.3),
-        ganGeneratedDetected: Math.floor((deepfakeDocs.length + Math.random()) * 0.7),
-        accuracyRate: this.calculateDynamicAccuracyRate(),
+        deepfakesDetected: deepfakeDocs.length,
+        faceSwapsDetected: Math.floor(deepfakeDocs.length * 0.3),
+        ganGeneratedDetected: Math.floor(deepfakeDocs.length * 0.7),
+        accuracyRate: hasCompletedDocuments ? this.calculateDynamicAccuracyRate() : 0,
         systemStatus: await this.getDynamicSystemStatus(),
-        activeAnalyses: analyzingDocs.length + Math.floor(Math.random() * 2), // Show dynamic activity
+        activeAnalyses: analyzingDocs.length,
         lastUpdated: now
       }
 
@@ -175,7 +177,8 @@ class DataService {
           tampered: await this.getDocumentCountByDate(date, 'tampered'),
           forged: await this.getDocumentCountByDate(date, 'forged'),
           aiGenerated: await this.getDocumentCountByDate(date, 'ai-generated'),
-          riskScore: await this.getAvgRiskScoreByDate(date)
+          riskScore: await this.getAvgRiskScoreByDate(date),
+          avgProcessingTime: this.calculateHistoricalProcessingTime(date)
         })
       }
 
@@ -287,11 +290,19 @@ class DataService {
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('authcorp_documents')
-        return stored ? JSON.parse(stored) : []
+        if (!stored) {
+          return []
+        }
+
+        const parsed = JSON.parse(stored)
+        return Array.isArray(parsed) ? parsed : []
       }
       return []
     } catch (error) {
       console.error('Error reading documents from storage:', error)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('authcorp_documents')
+      }
       return []
     }
   }
@@ -311,21 +322,52 @@ class DataService {
     this.saveDocumentsToStorage(documents)
     // Clear cache to force refresh
     this.cache.clear()
-    // Emit update events
-    this.emit('stats_updated', null)
-    this.emit('activity_updated', null)
+    // Broadcast fresh values so subscribers never receive null payloads
+    void this.refreshLiveData()
+  }
+
+  private async refreshLiveData(): Promise<void> {
+    try {
+      const [stats, activity, health] = await Promise.all([
+        this.getRealTimeStats(),
+        this.getRecentActivity(10),
+        this.getSystemHealth(),
+      ])
+
+      this.emit('stats_updated', stats)
+      this.emit('activity_updated', activity)
+      this.emit('health_updated', health)
+    } catch (error) {
+      console.error('Error broadcasting live data:', error)
+    }
   }
 
   private calculateDynamicProcessingTime(): number {
     const documents = this.getDocumentsFromStorage()
     const completedDocs = documents.filter(doc => doc.status === 'completed' && doc.processingTime)
-    const baseTime = completedDocs.length > 0 ? 
-      completedDocs.reduce((sum, doc) => sum + (doc.processingTime || 2.5), 0) / completedDocs.length :
-      2.5
+    if (completedDocs.length === 0) {
+      return 0
+    }
+
+    const baseTime = completedDocs.reduce((sum, doc) => sum + (doc.processingTime || 2.5), 0) / completedDocs.length
     
     // Add dynamic variation based on system load
     const loadVariation = Math.sin(Date.now() / 5000) * 0.5
     return Math.max(1.0, baseTime + loadVariation)
+  }
+
+  private calculateHistoricalProcessingTime(date: Date): number {
+    const documents = this.getDocumentsFromStorage()
+    const completedDocs = documents.filter(doc => doc.status === 'completed' && doc.processingTime)
+    if (completedDocs.length === 0) {
+      return 0
+    }
+
+    const baseTime = completedDocs.reduce((sum, doc) => sum + (doc.processingTime || 2.5), 0) / completedDocs.length
+
+    const dateSeed = date.getFullYear() * 1000 + date.getMonth() * 31 + date.getDate()
+    const variation = Math.sin(dateSeed) * 0.35
+    return Math.max(1.0, baseTime + variation)
   }
 
   private calculateDynamicAccuracyRate(): number {
@@ -408,11 +450,21 @@ class DataService {
 
   private async getDocumentCountByDate(date: Date, category: string): Promise<number> {
     // In production, query database for actual counts
+    const documents = this.getDocumentsFromStorage()
+    if (documents.length === 0) {
+      return 0
+    }
+
     return Math.floor(Math.random() * 50)
   }
 
   private async getAvgRiskScoreByDate(date: Date): Promise<number> {
     // In production, calculate from actual risk scores
+    const documents = this.getDocumentsFromStorage()
+    if (documents.length === 0) {
+      return 0
+    }
+
     return Math.random() * 100
   }
 

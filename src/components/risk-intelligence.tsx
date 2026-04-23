@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheckIcon,
@@ -16,6 +16,7 @@ import {
   EyeIcon,
 } from '@heroicons/react/24/outline'
 import { useForensics } from '@/components/forensics-provider'
+import { dataService, type RealTimeStats } from '@/lib/data-service'
 
 interface RiskIntelligenceProps {
   data?: any
@@ -43,75 +44,256 @@ interface PersonProfile {
   emailAddresses: string[]
 }
 
+interface LiveRiskIntelligence {
+  personRiskScore: number
+  riskCategory: RiskCategory
+  findings: RiskFinding[]
+}
+
+interface TimelineEntry {
+  title: string
+  description: string
+  timestamp: string
+  icon: typeof DocumentTextIcon
+  tone: 'blue' | 'green' | 'yellow' | 'purple' | 'gray'
+}
+
+const toTitleCase = (value: string) =>
+  value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\.[^/.]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
 export function RiskIntelligence({ data }: RiskIntelligenceProps) {
   const { state } = useForensics()
-  const [selectedDocument, setSelectedDocument] = useState(state.activeDocument || state.documents[0])
+  const [selectedDocument, setSelectedDocument] = useState<(typeof state.documents)[number] | null>(state.activeDocument ?? state.documents[0] ?? null)
   const [isSearching, setIsSearching] = useState(false)
   const [searchProgress, setSearchProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'profile' | 'timeline'>('overview')
-  
-  // Mock extracted person data
-  const [personProfile] = useState<PersonProfile>({
-    name: 'John Michael Smith',
-    dateOfBirth: '1985-03-15',
-    nationality: 'United States',
-    identificationNumbers: ['SSN: ***-**-1234', 'DL: D123456789'],
-    addresses: ['123 Main St, New York, NY 10001', '456 Oak Ave, Los Angeles, CA 90210'],
-    phoneNumbers: ['+1 (555) 123-4567', '+1 (555) 987-6543'],
-    emailAddresses: ['john.smith@email.com', 'j.smith@company.com']
-  })
-  
-  // Mock risk findings
-  const [riskFindings] = useState<RiskFinding[]>([
-    {
-      type: 'criminal',
-      description: 'Minor traffic violation - Speeding ticket',
-      confidence: 95,
-      source: 'State DMV Records',
-      date: '2023-08-15',
-      severity: 'low'
-    },
-    {
-      type: 'breach',
-      description: 'Email found in LinkedIn data breach (2021)',
-      confidence: 88,
-      source: 'HaveIBeenPwned Database',
-      date: '2021-06-01',
-      severity: 'medium'
-    },
-    {
-      type: 'fraud',
-      description: 'Similar name flagged in financial fraud case',
-      confidence: 45,
-      source: 'Commercial Fraud Database',
-      date: '2022-11-20',
-      severity: 'low'
+  const [liveStats, setLiveStats] = useState<RealTimeStats | null>(null)
+  const currentRiskIntelligence = useMemo<LiveRiskIntelligence | null>(() => {
+    return (
+      selectedDocument?.results?.riskIntelligence ??
+      data?.riskResults ??
+      data?.riskIntelligence ??
+      null
+    ) as LiveRiskIntelligence | null
+  }, [data, selectedDocument])
+
+  const fallbackFindings = useMemo<RiskFinding[]>(() => {
+    if (!selectedDocument) {
+      return []
     }
-  ])
-  
-  const [riskScore] = useState(25) // 0-100 scale
-  const [riskCategory] = useState<RiskCategory>('low')
-  
-  useEffect(() => {
-    if (selectedDocument && selectedDocument.status === 'completed' && !selectedDocument.results?.riskIntelligence) {
-      performRiskCheck()
+
+    const classification = selectedDocument.classification
+    const authenticity = selectedDocument.results?.authenticity
+    const findings: RiskFinding[] = []
+
+    if (classification?.riskFactors?.length) {
+      classification.riskFactors.forEach((factor, index) => {
+        const normalizedFactor = factor.toLowerCase()
+        findings.push({
+          type: normalizedFactor.includes('fraud') || normalizedFactor.includes('ai') ? 'fraud' : 'regulatory',
+          description: factor,
+          confidence: clamp(92 - index * 5, 35, 99),
+          source: 'Document Classification',
+          severity: normalizedFactor.includes('high') || normalizedFactor.includes('critical') ? 'high' : normalizedFactor.includes('review') ? 'medium' : 'low',
+        })
+      })
     }
+
+    if (authenticity && authenticity.category !== 'authentic') {
+      findings.push({
+        type: authenticity.category === 'tampered' ? 'fraud' : 'regulatory',
+        description: `Authenticity scan flagged the document as ${authenticity.category.replace('-', ' ')}`,
+        confidence: Math.round(authenticity.confidence),
+        source: 'Authenticity Engine',
+        severity: authenticity.category === 'forged' ? 'high' : 'medium',
+      })
+    }
+
+    if (selectedDocument.blockedReason) {
+      findings.push({
+        type: 'regulatory',
+        description: selectedDocument.blockedReason,
+        confidence: 98,
+        source: 'Forensics Policy Engine',
+        severity: 'high',
+      })
+    }
+
+    return findings
   }, [selectedDocument])
 
-  // Real-time data updates
+  const riskFindings = currentRiskIntelligence?.findings ?? fallbackFindings
+
+  const riskScore = useMemo(() => {
+    if (currentRiskIntelligence) {
+      return clamp(currentRiskIntelligence.personRiskScore, 0, 100)
+    }
+
+    if (!selectedDocument) {
+      return 0
+    }
+
+    const authenticityScore = selectedDocument.results?.authenticity?.score ?? 75
+    const severityPenalty = riskFindings.reduce((total, finding) => {
+      if (finding.severity === 'high') return total + 18
+      if (finding.severity === 'medium') return total + 10
+      return total + 4
+    }, 0)
+
+    const blockedPenalty = selectedDocument.status === 'blocked' ? 15 : 0
+    return clamp(Math.round((100 - authenticityScore) * 0.6 + severityPenalty + blockedPenalty), 0, 100)
+  }, [currentRiskIntelligence, riskFindings, selectedDocument])
+
+  const riskCategory = useMemo<RiskCategory>(() => {
+    if (currentRiskIntelligence) {
+      return currentRiskIntelligence.riskCategory
+    }
+
+    if (riskScore <= 30) return 'low'
+    if (riskScore <= 70) return 'medium'
+    return 'high'
+  }, [currentRiskIntelligence, riskScore])
+
+  const sourceCount = useMemo(() => {
+    return new Set(riskFindings.map((finding) => finding.source)).size
+  }, [riskFindings])
+
+  const timelineEntries = useMemo<TimelineEntry[]>(() => {
+    if (!selectedDocument) {
+      return []
+    }
+
+    const authenticity = selectedDocument.results?.authenticity
+    const classification = selectedDocument.classification
+    const uploadedAt = selectedDocument.uploadedAt ? new Date(selectedDocument.uploadedAt) : null
+
+    return [
+      {
+        title: 'Document received',
+        description: `${selectedDocument.filename} uploaded and added to the intelligence queue.`,
+        timestamp: uploadedAt ? uploadedAt.toLocaleString() : 'Unknown upload time',
+        icon: DocumentTextIcon,
+        tone: 'blue',
+      },
+      {
+        title: 'Classification completed',
+        description: classification
+          ? `Detected as ${toTitleCase(classification.type)} with ${Math.round(classification.confidence * 100)}% confidence.`
+          : 'Classification is still pending for this document.',
+        timestamp: classification ? 'Completed' : 'Pending',
+        icon: CheckCircleIcon,
+        tone: classification ? 'green' : 'gray',
+      },
+      {
+        title: 'Authenticity scan finished',
+        description: authenticity
+          ? `Authenticity score ${authenticity.score}/100 with ${Math.round(authenticity.confidence)}% confidence.`
+          : 'No authenticity result available yet.',
+        timestamp: authenticity ? authenticity.category : 'Pending',
+        icon: ShieldCheckIcon,
+        tone: authenticity?.category === 'authentic' ? 'green' : authenticity ? 'yellow' : 'gray',
+      },
+      {
+        title: 'Risk intelligence generated',
+        description: `${riskFindings.length} findings resolved from ${sourceCount || 'live'} sources.`,
+        timestamp: currentRiskIntelligence ? 'Live result' : 'Derived from document state',
+        icon: ExclamationTriangleIcon,
+        tone: riskFindings.length > 0 ? 'yellow' : 'gray',
+      },
+      {
+        title: 'Current status',
+        description: `Document currently marked as ${selectedDocument.status}.`,
+        timestamp: isSearching
+          ? `Searching ${searchProgress.toFixed(0)}%`
+          : liveStats
+            ? `${liveStats.activeAnalyses} active analyses`
+            : 'Live monitoring',
+        icon: ClockIcon,
+        tone: selectedDocument.status === 'blocked' ? 'purple' : selectedDocument.status === 'completed' ? 'green' : 'blue',
+      },
+    ]
+  }, [currentRiskIntelligence, isSearching, liveStats, riskFindings.length, searchProgress, selectedDocument, sourceCount])
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (selectedDocument && selectedDocument.status === 'analyzing') {
-        // Simulate progress updates
-        const progress = Math.min((selectedDocument.progress || 0) + Math.random() * 10, 100)
-        // Update document progress (this would normally come from the backend)
+    let mounted = true
+
+    const loadLiveStats = async () => {
+      try {
+        const stats = await dataService.getRealTimeStats()
+        if (mounted) {
+          setLiveStats(stats)
+        }
+      } catch (error) {
+        console.error('Error loading live risk stats:', error)
       }
-    }, 2000)
+    }
 
-    return () => clearInterval(interval)
-  }, [selectedDocument])
-  
-  const performRiskCheck = async () => {
+    loadLiveStats()
+    const interval = setInterval(loadLiveStats, 5000)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [])
+
+  const personProfile = useMemo<PersonProfile>(() => {
+    if ((data as any)?.profile) {
+      return (data as any).profile
+    }
+
+    const documentName = selectedDocument?.filename ? toTitleCase(selectedDocument.filename) : 'No Document Selected'
+    const documentType = selectedDocument?.classification?.type ? toTitleCase(selectedDocument.classification.type) : selectedDocument?.fileType || 'Unknown'
+
+    return {
+      name: documentName,
+      dateOfBirth: selectedDocument?.uploadedAt ? new Date(selectedDocument.uploadedAt).toLocaleString() : undefined,
+      nationality: documentType,
+      identificationNumbers: selectedDocument ? [`Document ID: ${selectedDocument.id}`] : [],
+      addresses: selectedDocument?.classification?.riskFactors?.length ? selectedDocument.classification.riskFactors : [selectedDocument ? 'No address data extracted' : 'No document selected'],
+      phoneNumbers: [selectedDocument ? `Status: ${selectedDocument.status}` : 'Status: unavailable'],
+      emailAddresses: selectedDocument?.results?.authenticity ? [`Authenticity: ${selectedDocument.results.authenticity.category}`] : ['No authenticity result yet'],
+    }
+  }, [data, selectedDocument])
+
+  const exportReport = useCallback(() => {
+    const report = {
+      generatedAt: new Date().toISOString(),
+      document: selectedDocument ? {
+        id: selectedDocument.id,
+        filename: selectedDocument.filename,
+        fileType: selectedDocument.fileType,
+        status: selectedDocument.status,
+      } : null,
+      riskSummary: {
+        score: riskScore,
+        category: riskCategory,
+        totalFindings: riskFindings.length,
+        highSeverityFindings: riskFindings.filter((finding) => finding.severity === 'high').length,
+      },
+      personProfile,
+      findings: riskFindings,
+    }
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = `risk-intelligence-report-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(downloadUrl)
+  }, [personProfile, riskCategory, riskFindings, riskScore, selectedDocument])
+
+  const performRiskCheck = useCallback(async () => {
     setIsSearching(true)
     setSearchProgress(0)
     
@@ -139,7 +321,26 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
         riskResults: { riskScore, riskCategory, riskFindings } 
       } 
     }))
-  }
+  }, [selectedDocument, riskScore, riskCategory, riskFindings])
+  
+  useEffect(() => {
+    if (selectedDocument && selectedDocument.status === 'completed' && !selectedDocument.results?.riskIntelligence) {
+      performRiskCheck()
+    }
+  }, [selectedDocument, performRiskCheck])
+
+  // Real-time data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (selectedDocument && selectedDocument.status === 'analyzing') {
+        // Simulate progress updates
+        const progress = Math.min((selectedDocument.progress || 0) + Math.random() * 10, 100)
+        // Update document progress (this would normally come from the backend)
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [selectedDocument])
   
   const getRiskColor = (category: RiskCategory) => {
     switch (category) {
@@ -278,15 +479,17 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
           className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
         >
           <div className="flex items-center space-x-3">
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-              <UserIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className={`p-3 rounded-lg ${selectedDocument ? 'bg-blue-100 dark:bg-blue-900/20' : 'bg-gray-100 dark:bg-gray-700/60'}`}>
+              <UserIcon className={`w-6 h-6 ${selectedDocument ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`} />
             </div>
             <div>
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Identity Verified
+                {selectedDocument?.results?.authenticity ? 'Identity Verified' : 'Identity Pending'}
               </h4>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Person profile extracted
+                {selectedDocument
+                  ? `${selectedDocument.filename} • ${selectedDocument.status}`
+                  : 'Select a completed document'}
               </p>
             </div>
           </div>
@@ -304,10 +507,12 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
             </div>
             <div>
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                6 Databases
+                {sourceCount || liveStats?.activeAnalyses || 0} Databases
               </h4>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Sources checked
+                {sourceCount > 0
+                  ? `Sources checked from ${sourceCount} unique records`
+                  : 'Sources checked in real time'}
               </p>
             </div>
           </div>
@@ -320,15 +525,19 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
           className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
         >
           <div className="flex items-center space-x-3">
-            <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
-              <ClockIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            <div className={`p-3 rounded-lg ${isSearching || (liveStats?.activeAnalyses ?? 0) > 0 ? 'bg-purple-100 dark:bg-purple-900/20' : 'bg-gray-100 dark:bg-gray-700/60'}`}>
+              <ClockIcon className={`w-6 h-6 ${isSearching || (liveStats?.activeAnalyses ?? 0) > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400'}`} />
             </div>
             <div>
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Real-time
+                {isSearching || (liveStats?.activeAnalyses ?? 0) > 0 ? 'Real-time' : 'Standby'}
               </h4>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Live monitoring
+                {isSearching
+                  ? `Searching ${searchProgress.toFixed(0)}%`
+                  : liveStats
+                    ? `${liveStats.activeAnalyses} active analyses`
+                    : 'Live monitoring'}
               </p>
             </div>
           </div>
@@ -340,10 +549,14 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
   const renderFindings = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 className="text-lg font-semibold text-white dark:text-white">
           Risk Intelligence Findings ({riskFindings.length})
         </h3>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <button
+          type="button"
+          onClick={exportReport}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
           Export Report
         </button>
       </div>
@@ -485,6 +698,71 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
       </div>
     </div>
   )
+
+  const renderTimeline = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white dark:text-white">
+            Risk Timeline
+          </h3>
+          <p className="text-sm text-gray-400">
+            Ordered events derived from the selected document and live analysis state.
+          </p>
+        </div>
+        <div className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-gray-200 border border-white/10">
+          {timelineEntries.length} events
+        </div>
+      </div>
+
+      {timelineEntries.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-white/15 bg-white/5 p-6 text-gray-300">
+          Select a completed document to see its analysis timeline.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {timelineEntries.map((entry, index) => {
+            const EntryIcon = entry.icon
+            const toneClasses = {
+              blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
+              green: 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400',
+              yellow: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400',
+              purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
+              gray: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+            }[entry.tone]
+
+            return (
+              <motion.div
+                key={`${entry.title}-${index}`}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.08 }}
+                className="flex items-start gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5"
+              >
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${toneClasses}`}>
+                  <EntryIcon className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                      {entry.title}
+                    </h4>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      {entry.timestamp}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                    {entry.description}
+                  </p>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
   
   const tabs = [
     { id: 'overview', name: 'Overview', icon: ShieldCheckIcon },
@@ -498,7 +776,7 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
       case 'overview': return renderOverview()
       case 'findings': return renderFindings()
       case 'profile': return renderProfile()
-      case 'timeline': return renderOverview() // Placeholder
+      case 'timeline': return renderTimeline()
       default: return renderOverview()
     }
   }
@@ -508,7 +786,7 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-white dark:text-white">
             Risk Intelligence
           </h1>
           <p className="text-gray-600 dark:text-gray-400">

@@ -1,14 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { DocumentUpload } from '@/components/document-upload'
 import { Dashboard } from '@/components/dashboard'
 import { ForensicAnalysis } from '@/components/forensic-analysis'
 import { RiskIntelligence } from '@/components/risk-intelligence'
 import { FuturisticFeatures } from '@/components/futuristic-features'
+import MonitoringPage from '@/app/monitoring/page'
+import BlockchainAnchoringPage from '@/app/blockchain/page'
+import AIAssistantPage from '@/app/ai-assistant/page'
 import { Navigation } from '@/components/navigation'
 import { Header } from '@/components/header'
+import { useRealTimeStats, useSystemHealth, type RealTimeStats, type SystemHealth } from '@/lib/data-service'
 import { 
   DocumentTextIcon, 
   ShieldCheckIcon, 
@@ -17,11 +21,13 @@ import {
   CpuChipIcon,
 } from '@heroicons/react/24/outline'
 
-type ActiveView = 'dashboard' | 'upload' | 'forensics' | 'risk-intelligence' | 'futuristic'
+type ActiveView = 'dashboard' | 'upload' | 'forensics' | 'risk-intelligence' | 'futuristic' | 'monitoring' | 'blockchain' | 'ai-assistant'
 
 export default function Home() {
   const [activeView, setActiveView] = useState<ActiveView>('dashboard')
   const [analysisData, setAnalysisData] = useState(null)
+  const [liveStats, setLiveStats] = useState<RealTimeStats | null>(null)
+  const [liveHealth, setLiveHealth] = useState<SystemHealth | null>(null)
 
   useEffect(() => {
     const handleNavigateToForensics = (event: CustomEvent) => {
@@ -36,6 +42,38 @@ export default function Home() {
       window.removeEventListener('navigate-to-forensics', handleNavigateToForensics as EventListener)
     }
   }, [])
+
+  useEffect(() => {
+    let mounted = true
+
+    useRealTimeStats().then((stats) => {
+      if (mounted) {
+        setLiveStats(stats)
+      }
+    })
+
+    useSystemHealth().then((health) => {
+      if (mounted) {
+        setLiveHealth(health)
+      }
+    })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const aiEngineStatus = liveHealth?.aiEngine ?? (liveStats ? (liveStats.systemStatus === 'operational' ? 'online' : liveStats.systemStatus === 'degraded' ? 'degraded' : 'offline') : null)
+  const aiEngineStatusLabel = aiEngineStatus
+    ? aiEngineStatus.charAt(0).toUpperCase() + aiEngineStatus.slice(1)
+    : 'Loading'
+  const aiEngineStatusClass = aiEngineStatus === 'online'
+    ? 'text-blue-300'
+    : aiEngineStatus === 'degraded'
+      ? 'text-amber-300'
+      : aiEngineStatus === 'offline'
+        ? 'text-red-300'
+        : 'text-gray-400'
 
   const navigationItems = [
     {
@@ -77,36 +115,52 @@ export default function Home() {
           <>
             <section className="mb-6">
               <div className="glass-card neon-border p-6 sm:p-8">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                   <div className="max-w-2xl">
-                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
-                      The Trust & Verification Platform for a Zero‑Trust World
-                    </h2>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                        <div className="w-2 h-2 rounded-full" style={{ background: 'linear-gradient(135deg, var(--neon-cyan), var(--neon-blue))' }} />
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-200">
+                          AuthCorp AI Verification
+                        </span>
+                      </div>
+                      <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
+                        The Trust & Verification Platform for a Zero‑Trust World
+                      </h2>
+                    </div>
                     <p className="mt-3 text-sm sm:text-base text-gray-300">
                       Forensic document analysis, AI anomaly detection, blockchain anchoring, dark web intelligence, and advanced identity validation — flawlessly integrated and built to scale globally.
                     </p>
                     <div className="mt-6 flex flex-wrap gap-3">
-                      <a href="/monitoring" className="btn-cyber">Launch Monitoring</a>
-                      <a href="/blockchain" className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white hover:bg-white/10 transition-colors">Anchor on Blockchain</a>
-                      <a href="/ai-assistant" className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-colors">Ask AI Assistant</a>
+                      <button type="button" onClick={() => setActiveView('monitoring')} className="btn-cyber">Launch Monitoring</button>
+                      <button type="button" onClick={() => setActiveView('blockchain')} className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white hover:bg-white/10 transition-colors">Anchor on Blockchain</button>
+                      <button type="button" onClick={() => setActiveView('ai-assistant')} className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-colors">Ask AI Assistant</button>
                     </div>
                   </div>
-                  <div className="flex-1 grid grid-cols-2 gap-3">
-                    <div className="glass-card p-4">
+                  <div className="w-full max-w-md grid grid-cols-2 gap-3 lg:self-start">
+                    <div className="glass-card p-4 min-w-0 overflow-hidden">
                       <p className="text-xs text-gray-400">Authenticity Rate</p>
-                      <p className="mt-1 text-2xl font-bold text-green-400">94.2%</p>
+                      <p className="mt-1 text-xl sm:text-2xl font-bold text-green-400 leading-tight truncate">
+                        {liveStats ? `${liveStats.authenticityRate.toFixed(1)}%` : 'Loading...'}
+                      </p>
                     </div>
-                    <div className="glass-card p-4">
+                    <div className="glass-card p-4 min-w-0 overflow-hidden">
                       <p className="text-xs text-gray-400">High‑Risk Flags</p>
-                      <p className="mt-1 text-2xl font-bold text-red-400">3</p>
+                      <p className="mt-1 text-xl sm:text-2xl font-bold text-red-400 leading-tight truncate">
+                        {liveStats ? liveStats.highRiskFlags : 'Loading...'}
+                      </p>
                     </div>
-                    <div className="glass-card p-4">
+                    <div className="glass-card p-4 min-w-0 overflow-hidden">
                       <p className="text-xs text-gray-400">Documents Today</p>
-                      <p className="mt-1 text-2xl font-bold text-white">24</p>
+                      <p className="mt-1 text-xl sm:text-2xl font-bold text-white leading-tight truncate">
+                        {liveStats ? liveStats.documentsProcessed.toLocaleString() : 'Loading...'}
+                      </p>
                     </div>
-                    <div className="glass-card p-4">
+                    <div className="glass-card p-4 min-w-0 overflow-hidden">
                       <p className="text-xs text-gray-400">AI Engine Status</p>
-                      <p className="mt-1 text-2xl font-bold text-blue-300">Operational</p>
+                      <p className={`mt-1 text-xl sm:text-2xl font-bold leading-tight truncate ${aiEngineStatusClass}`}>
+                        {aiEngineStatusLabel}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -123,16 +177,22 @@ export default function Home() {
         return <RiskIntelligence data={analysisData} />
       case 'futuristic':
         return <FuturisticFeatures activeDocument={analysisData} />
+      case 'monitoring':
+        return <MonitoringPage />
+      case 'blockchain':
+        return <BlockchainAnchoringPage />
+      case 'ai-assistant':
+        return <AIAssistantPage />
       default:
         return <Dashboard analysisData={analysisData} />
     }
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh flex flex-col">
       <Header />
 
-      <div className="flex flex-col lg:flex-row min-h-screen">
+      <div className="flex flex-1 flex-col lg:flex-row pt-4 lg:pt-6">
         {/* Mobile Navigation */}
         <div className="lg:hidden glass-card">
           <div className="mobile-container py-4">
@@ -170,9 +230,14 @@ export default function Home() {
         </div>
 
         {/* Desktop Sidebar */}
-        <div className="hidden lg:block w-64 shrink-0 glass-card">
-          <div className="p-6 sticky top-0">
-            <div className="flex items-center space-x-3 mb-8">
+        <div className="hidden lg:block w-64 shrink-0 self-start">
+          <div
+            className="p-5 lg:sticky lg:top-4 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md overflow-hidden"
+            style={{
+              boxShadow: '0 10px 24px rgba(2, 8, 23, 0.45), 0 0 14px rgba(56, 189, 248, 0.08)'
+            }}
+          >
+            <div className="flex items-center space-x-3 mb-6 px-1">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{
                 background: 'linear-gradient(135deg, var(--neon-cyan), var(--neon-blue))'
               }}>
@@ -192,7 +257,7 @@ export default function Home() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 mobile-container py-4 lg:p-6 overflow-auto">
+        <div className="flex-1 mobile-container py-4 lg:p-6">
           <motion.div
             key={activeView}
             initial={{ opacity: 0, y: 20 }}

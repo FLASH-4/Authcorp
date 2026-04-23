@@ -364,7 +364,7 @@ Authority: U.S. DEPARTMENT OF STATE`
     const extractedData = documents.map(doc => this.extractStructuredData(doc.text))
     
     // Check name consistency
-    const names = extractedData.map(data => data.name).filter(Boolean)
+    const names = extractedData.map(data => data.name).filter((name): name is string => Boolean(name))
     if (names.length > 1 && !this.areNamesConsistent(names)) {
       inconsistencies.push({
         type: 'name_mismatch',
@@ -388,7 +388,7 @@ Authority: U.S. DEPARTMENT OF STATE`
     }
     
     // Check address consistency
-    const addresses = extractedData.map(data => data.address).filter(Boolean)
+    const addresses = extractedData.map(data => data.address).filter((address): address is string => Boolean(address))
     if (addresses.length > 1 && !this.areAddressesConsistent(addresses)) {
       inconsistencies.push({
         type: 'address_mismatch',

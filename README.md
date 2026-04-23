@@ -132,10 +132,12 @@ DATABASE_URL=postgresql://authcorp_user:your_secure_password@localhost:5432/auth
 # Security
 JWT_SECRET=your_jwt_secret_key_here
 ENCRYPTION_KEY=your_32_character_encryption_key
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_oauth_client_id_here
 
 # External APIs
 OPENAI_API_KEY=your_openai_api_key
 RISK_INTEL_API_KEY=your_risk_intelligence_key
+ALERT_WEBHOOK_URL=your_alert_webhook_url
 ```
 
 ## 🚀 Production Deployment

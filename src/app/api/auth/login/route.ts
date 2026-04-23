@@ -36,6 +36,7 @@ const users = [
 
 export async function POST(request: NextRequest) {
   try {
+    const isProduction = process.env.NODE_ENV === 'production'
     const body = await request.json()
     const validated = validate(loginSchema, body)
     const clientIp = request.headers.get('x-forwarded-for') || 'unknown'
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
     // Set secure, httpOnly session cookie
     response.cookies.set('authcorp_session', token, {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
       sameSite: 'strict',
       path: '/',
       maxAge: 60 * 60 * 24, // 24h

@@ -291,7 +291,7 @@ export class DocumentClassifier {
 
   // Get document-specific verification instructions
   static getVerificationInstructions(docType: DocumentType): string[] {
-    const instructions: Record<DocumentType, string[]> = {
+    const instructions: Partial<Record<DocumentType, string[]>> = {
       aadhar_card: [
         'Verify 12-digit Aadhar number format',
         'Check QR code authenticity',
@@ -321,6 +321,6 @@ export class DocumentClassifier {
       ]
     }
     
-    return instructions[docType] || instructions.unknown
+    return instructions[docType] || instructions.unknown || []
   }
 }
