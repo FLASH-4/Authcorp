@@ -80,7 +80,7 @@ export class DatabaseManager {
   }
 
   private loadConfig(): DatabaseConfig {
-    const cfg = {
+    return {
       type: (process.env.DB_TYPE as any) || 'postgresql',
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
@@ -90,17 +90,14 @@ export class DatabaseManager {
       ssl: process.env.DB_SSL === 'true',
       connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10')
     }
-
-    // Enforce credentials in production
-    if ((process.env.NODE_ENV === 'production') && (!cfg.password || cfg.password.length < 8)) {
-      throw new Error('DB_PASSWORD is missing or too weak in production environment.')
-    }
-
-    return cfg
   }
 
   async connect(): Promise<void> {
     try {
+      if ((process.env.NODE_ENV === 'production') && (!this.config.password || this.config.password.length < 8)) {
+        throw new Error('DB_PASSWORD is missing or too weak in production environment.')
+      }
+
       // Database-specific connection logic would go here
       // For now, we'll simulate a connection
       console.log(`Connecting to ${this.config.type} database at ${this.config.host}:${this.config.port}`)
