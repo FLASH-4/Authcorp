@@ -8,7 +8,7 @@ const users = [
   {
     id: '1',
     email: 'admin@authcorp.com',
-    password: '$2a$12$LQv3c1yqBwEHXk.JHd3HNOdSiIiZiOHXkZZZZZZZZZZZZZZZZZZZZ', // 'admin123'
+    password: '$2a$12$ocP/GfoKlFTJIyUQNJGmGOnPOQDvpP3n7G.qfqrn0Rwu9eziVLYWy', // 'admin123'
     name: 'Admin User',
     role: 'admin' as const,
     permissions: ['*'],
@@ -17,7 +17,7 @@ const users = [
   {
     id: '2',
     email: 'investigator@authcorp.com',
-    password: '$2a$12$LQv3c1yqBwEHXk.JHd3HNOdSiIiZiOHXkZZZZZZZZZZZZZZZZZZZZ', // 'investigator123'
+    password: '$2a$12$jEtk6xVa3RO0op4HtVS3julrNwFhBNNXiLrM/.Q8jdbYNmHPpwyhO', // 'investigator123'
     name: 'John Investigator',
     role: 'investigator' as const,
     permissions: ['document:analyze', 'risk:check', 'report:generate'],
@@ -26,7 +26,7 @@ const users = [
   {
     id: '3',
     email: 'analyst@authcorp.com',
-    password: '$2a$12$LQv3c1yqBwEHXk.JHd3HNOdSiIiZiOHXkZZZZZZZZZZZZZZZZZZZZ', // 'analyst123'
+    password: '$2a$12$69.Y230ObjSdPzEWiTwfWe/1w/dBTt9Cg6ZP7WwAByX0T0.yPKbAC', // 'analyst123'
     name: 'Jane Analyst',
     role: 'analyst' as const,
     permissions: ['document:analyze', 'report:view'],

@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
+    <html lang="en" className="h-full dark" suppressHydrationWarning>
       <body className={`${inter.className} h-full cyber-bg antialiased`} suppressHydrationWarning>
         <HydrationGate>
           <Providers>

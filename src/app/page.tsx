@@ -15,7 +15,6 @@ import {
   EyeIcon, 
   ChartBarIcon,
   CpuChipIcon,
-  GlobeAltIcon
 } from '@heroicons/react/24/outline'
 
 type ActiveView = 'dashboard' | 'upload' | 'forensics' | 'risk-intelligence' | 'futuristic'
@@ -25,7 +24,6 @@ export default function Home() {
   const [analysisData, setAnalysisData] = useState(null)
 
   useEffect(() => {
-    // Handle navigation from document upload to forensic analysis
     const handleNavigateToForensics = (event: CustomEvent) => {
       setActiveView('forensics')
       if (event.detail?.document) {
@@ -34,7 +32,6 @@ export default function Home() {
     }
 
     window.addEventListener('navigate-to-forensics', handleNavigateToForensics as EventListener)
-
     return () => {
       window.removeEventListener('navigate-to-forensics', handleNavigateToForensics as EventListener)
     }
@@ -76,7 +73,48 @@ export default function Home() {
   const renderActiveView = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard analysisData={analysisData} />
+        return (
+          <>
+            <section className="mb-6">
+              <div className="glass-card neon-border p-6 sm:p-8">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                  <div className="max-w-2xl">
+                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
+                      The Trust & Verification Platform for a Zero‑Trust World
+                    </h2>
+                    <p className="mt-3 text-sm sm:text-base text-gray-300">
+                      Forensic document analysis, AI anomaly detection, blockchain anchoring, dark web intelligence, and advanced identity validation — flawlessly integrated and built to scale globally.
+                    </p>
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <a href="/monitoring" className="btn-cyber">Launch Monitoring</a>
+                      <a href="/blockchain" className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white hover:bg-white/10 transition-colors">Anchor on Blockchain</a>
+                      <a href="/ai-assistant" className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-colors">Ask AI Assistant</a>
+                    </div>
+                  </div>
+                  <div className="flex-1 grid grid-cols-2 gap-3">
+                    <div className="glass-card p-4">
+                      <p className="text-xs text-gray-400">Authenticity Rate</p>
+                      <p className="mt-1 text-2xl font-bold text-green-400">94.2%</p>
+                    </div>
+                    <div className="glass-card p-4">
+                      <p className="text-xs text-gray-400">High‑Risk Flags</p>
+                      <p className="mt-1 text-2xl font-bold text-red-400">3</p>
+                    </div>
+                    <div className="glass-card p-4">
+                      <p className="text-xs text-gray-400">Documents Today</p>
+                      <p className="mt-1 text-2xl font-bold text-white">24</p>
+                    </div>
+                    <div className="glass-card p-4">
+                      <p className="text-xs text-gray-400">AI Engine Status</p>
+                      <p className="mt-1 text-2xl font-bold text-blue-300">Operational</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <Dashboard analysisData={analysisData} />
+          </>
+        )
       case 'upload':
         return <DocumentUpload onAnalysisComplete={setAnalysisData} />
       case 'forensics':
@@ -92,49 +130,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <Header />
-      {/* Hero */}
-      <section className="mobile-container py-10">
-        <div className="glass-card neon-border p-6 sm:p-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="max-w-2xl">
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
-                The Trust & Verification Platform for a Zero‑Trust World
-              </h2>
-              <p className="mt-3 text-sm sm:text-base text-gray-300">
-                Forensic document analysis, AI anomaly detection, blockchain anchoring, dark web intelligence, and advanced identity validation — flawlessly integrated and built to scale globally.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <a href="/monitoring" className="btn-cyber">Launch Monitoring</a>
-                <a href="/blockchain" className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white hover:bg-white/10 transition-colors">Anchor on Blockchain</a>
-                <a href="/ai-assistant" className="px-5 py-2.5 rounded-lg font-medium border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition-colors">Ask AI Assistant</a>
-              </div>
-            </div>
-            <div className="flex-1 grid grid-cols-2 gap-3">
-              <div className="glass-card p-4">
-                <p className="text-xs text-gray-400">Authenticity Rate</p>
-                <p className="mt-1 text-2xl font-bold text-green-400">94.2%</p>
-              </div>
-              <div className="glass-card p-4">
-                <p className="text-xs text-gray-400">High‑Risk Flags</p>
-                <p className="mt-1 text-2xl font-bold text-red-400">3</p>
-              </div>
-              <div className="glass-card p-4">
-                <p className="text-xs text-gray-400">Documents Today</p>
-                <p className="mt-1 text-2xl font-bold text-white">24</p>
-              </div>
-              <div className="glass-card p-4">
-                <p className="text-xs text-gray-400">AI Engine Status</p>
-                <p className="mt-1 text-2xl font-bold text-blue-300">Operational</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-      
-      {/* Main Content */}
-      <div className="flex flex-col lg:flex-row">
+
+      <div className="flex flex-col lg:flex-row min-h-screen">
         {/* Mobile Navigation */}
         <div className="lg:hidden glass-card">
           <div className="mobile-container py-4">
@@ -149,8 +147,6 @@ export default function Home() {
                 <p className="text-xs text-gray-300">AI Verification</p>
               </div>
             </div>
-            
-            {/* Mobile Navigation Tabs */}
             <div className="flex space-x-1 overflow-x-auto pb-2">
               {navigationItems.map((item) => {
                 const Icon = item.icon
@@ -172,10 +168,10 @@ export default function Home() {
             </div>
           </div>
         </div>
-        
-        {/* Desktop Sidebar Navigation */}
-        <div className="hidden lg:block w-64 min-h-screen glass-card">
-          <div className="p-6">
+
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:block w-64 shrink-0 glass-card">
+          <div className="p-6 sticky top-0">
             <div className="flex items-center space-x-3 mb-8">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{
                 background: 'linear-gradient(135deg, var(--neon-cyan), var(--neon-blue))'
@@ -187,30 +183,26 @@ export default function Home() {
                 <p className="text-sm text-gray-300">AI Verification</p>
               </div>
             </div>
-            
-            <Navigation 
+            <Navigation
               items={navigationItems}
               activeView={activeView}
               onViewChange={(view) => setActiveView(view as ActiveView)}
             />
           </div>
         </div>
-        
+
         {/* Main Content Area */}
-        <div className="flex-1 mobile-container py-4 lg:p-6">
+        <div className="flex-1 mobile-container py-4 lg:p-6 overflow-auto">
           <motion.div
             key={activeView}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="h-full"
           >
             {renderActiveView()}
           </motion.div>
         </div>
       </div>
-      
-      {/* Background Effects handled by cyber-bg */}
     </div>
   )
 }

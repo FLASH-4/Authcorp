@@ -19,15 +19,15 @@ export function ThemeProvider({ children, ...props }: CustomThemeProviderProps) 
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="light"
-      enableSystem={true}
+      defaultTheme="dark"
+      enableSystem={false}
       disableTransitionOnChange={false}
       storageKey="authcorp-theme"
       themes={['light', 'dark']}
-      forcedTheme={!mounted ? 'light' : undefined}
+      forcedTheme={!mounted ? 'dark' : undefined}
       {...props}
     >
-      <div className={!mounted ? 'light' : ''}>
+      <div className={!mounted ? 'dark' : ''}>
         {children}
       </div>
     </NextThemesProvider>

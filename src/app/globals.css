@@ -33,11 +33,12 @@
 
 .cyber-bg::before {
   content: '';
-  position: absolute;
+  position: fixed;
   inset: 0;
   background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
   background-size: 24px 24px, 24px 24px;
   pointer-events: none;
+  z-index: 0;
 }
 
 .neon-text {
