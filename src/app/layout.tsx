@@ -12,7 +12,8 @@ export const metadata: Metadata = {
   description: 'Next-generation AI-powered platform for document verification, forgery detection, and risk intelligence analysis.',
   keywords: 'document verification, forgery detection, AI forensics, risk intelligence, fraud prevention',
   authors: [{ name: 'AuthCorp Team' }],
-  robots: 'noindex, nofollow', // Security consideration for enterprise platform
+  robots: 'noindex, nofollow',
+  icons: { icon: '/favicon.svg', shortcut: '/favicon.svg' },
 }
 
 export const viewport: Viewport = {

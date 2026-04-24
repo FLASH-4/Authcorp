@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SecurityManager, AuditLogger } from '@/lib/security'
 import { googleTokenSchema, validate } from '@/lib/validation'
 
-// Google OAuth endpoint
+// Simple in-memory store of known Google accounts
+// In production replace with real DB lookup
+const knownGoogleAccounts = new Map<string, { id: string; email: string; name: string; role: string; permissions: string[]; organization: string; avatar?: string }>()
+
 export async function POST(request: NextRequest) {
   try {
     const isProduction = process.env.NODE_ENV === 'production'
@@ -12,14 +15,11 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') || 'unknown'
 
     if (!validated.success) {
-      return NextResponse.json(
-        { error: 'Invalid input', details: validated.errors },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid input', details: validated.errors }, { status: 400 })
     }
+
     const { token } = validated.data
 
-    // Verify Google token
     const googleResponse = await fetch(
       `https://www.googleapis.com/oauth2/v1/userinfo?access_token=${token}`
     )
@@ -34,19 +34,31 @@ export async function POST(request: NextRequest) {
         userAgent,
         riskLevel: 'medium'
       })
-
-      return NextResponse.json(
-        { error: 'Invalid Google token' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Invalid Google token' }, { status: 401 })
     }
 
     const googleUser = await googleResponse.json()
+    const email = googleUser.email?.toLowerCase()
 
-    // Check if user exists or create new user
-    const user = {
+    if (!email) {
+      return NextResponse.json({ error: 'Could not retrieve email from Google' }, { status: 400 })
+    }
+
+    // Check if this is a sign-up attempt for an already-registered account
+    const isSignUp = request.headers.get('x-auth-mode') === 'signup'
+    const existing = knownGoogleAccounts.get(email)
+
+    if (isSignUp && existing) {
+      return NextResponse.json(
+        { error: 'An account with this Google email already exists. Please sign in instead.' },
+        { status: 409 }
+      )
+    }
+
+    // Create or retrieve user
+    const user = existing || {
       id: `google_${googleUser.id}`,
-      email: googleUser.email,
+      email,
       name: googleUser.name,
       role: 'analyst' as const,
       permissions: ['document:analyze', 'report:view'],
@@ -54,7 +66,9 @@ export async function POST(request: NextRequest) {
       avatar: googleUser.picture
     }
 
-    // Generate JWT token
+    // Store it
+    knownGoogleAccounts.set(email, user)
+
     const tokenPayload = {
       userId: user.id,
       email: user.email,
@@ -66,16 +80,11 @@ export async function POST(request: NextRequest) {
 
     const jwtToken = SecurityManager.generateToken(tokenPayload, '24h')
 
-    // Log successful Google login
     await AuditLogger.logAction({
       userId: user.id,
       action: 'google_login_successful',
       resource: 'auth',
-      details: { 
-        email: user.email, 
-        name: user.name,
-        loginMethod: 'google'
-      },
+      details: { email: user.email, name: user.name },
       ipAddress: clientIp,
       userAgent,
       riskLevel: 'low'
@@ -93,18 +102,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Google login error:', error)
-    
-    await AuditLogger.logAction({
-      userId: 'system',
-      action: 'google_login_error',
-      resource: 'auth',
-      details: { error: error instanceof Error ? error.message : 'Unknown error' },
-      riskLevel: 'high'
-    })
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
