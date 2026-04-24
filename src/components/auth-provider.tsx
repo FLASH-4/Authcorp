@@ -114,8 +114,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error('Google sign-in is not configured.')
       }
 
-      const initClient = (googleObj: any) => {
-        googleObj.accounts.oauth2.initTokenClient({
+      const runGoogleFlow = (googleObj: any) => {
+        // Disable auto-select so it always shows account chooser
+        try { googleObj.accounts.id.disableAutoSelect() } catch { /* ignore */ }
+
+        const tokenClient = googleObj.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
           scope: 'email profile',
           prompt: 'select_account',
@@ -128,24 +131,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
               setLoading(false)
             }
           },
-        } as any).requestAccessToken()
+        } as any)
+
+        tokenClient.requestAccessToken({ prompt: 'select_account' })
       }
 
       if (typeof window !== 'undefined' && (window as any).google) {
-        initClient((window as any).google)
+        runGoogleFlow((window as any).google)
       } else {
-        // Dynamically load GSI script if not present
-        const existing = document.querySelector('script[src*="accounts.google.com/gsi"]')
-        if (existing) {
-          toast.error('Google sign-in is not ready yet. Please try again.')
-          setLoading(false)
-          return
-        }
         const script = document.createElement('script')
         script.src = 'https://accounts.google.com/gsi/client'
         script.onload = () => {
           if ((window as any).google) {
-            initClient((window as any).google)
+            runGoogleFlow((window as any).google)
           } else {
             toast.error('Google sign-in failed to load.')
             setLoading(false)
