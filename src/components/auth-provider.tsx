@@ -88,7 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const data = await response.json()
       setUser(data.user)
       toast.success('Login successful')
-      router.push('/dashboard')
+      router.push('/')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Login failed')
       throw error
@@ -110,6 +110,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         window.google.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
           scope: 'email profile',
+          prompt: 'select_account',
           callback: async (response: any) => {
             try {
               // Send the Google token to our backend
@@ -131,7 +132,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               // Cookie-based session is managed by server; no local storage
               setUser(data.user)
               toast.success('Google login successful')
-              router.push('/dashboard')
+              router.push('/')
             } catch (error) {
               toast.error(error instanceof Error ? error.message : 'Google login failed')
             } finally {
@@ -148,6 +149,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             window.google.accounts.oauth2.initTokenClient({
               client_id: googleClientId!,
               scope: 'email profile',
+              prompt: 'select_account',
               callback: async (response: any) => {
                 try {
                   const authResponse = await fetch('/api/auth/google', {
@@ -160,7 +162,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                   const data = await authResponse.json()
                   setUser(data.user)
                   toast.success('Google login successful')
-                  router.push('/dashboard')
+                  router.push('/')
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : 'Google login failed')
                 } finally {
