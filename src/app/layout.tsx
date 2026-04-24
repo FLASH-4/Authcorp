@@ -27,6 +27,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
+      <head>
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
+      </head>
       <body className={`${inter.className} h-full cyber-bg antialiased overflow-x-hidden`} suppressHydrationWarning>
         <HydrationGate>
           <Providers>

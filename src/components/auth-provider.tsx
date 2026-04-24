@@ -140,9 +140,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
           },
         }).requestAccessToken()
       } else {
-        // Fallback: redirect to Google OAuth
-        const googleAuthUrl = `https://accounts.google.com/oauth/authorize?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/google/callback')}&response_type=code&scope=email profile`
-        window.location.href = googleAuthUrl
+        // Fallback: use Google Identity Services popup via dynamic script load
+        const script = document.createElement('script')
+        script.src = 'https://accounts.google.com/gsi/client'
+        script.onload = () => {
+          if (window.google) {
+            window.google.accounts.oauth2.initTokenClient({
+              client_id: googleClientId!,
+              scope: 'email profile',
+              callback: async (response: any) => {
+                try {
+                  const authResponse = await fetch('/api/auth/google', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ token: response.access_token }),
+                  })
+                  if (!authResponse.ok) throw new Error('Google login failed')
+                  const data = await authResponse.json()
+                  setUser(data.user)
+                  toast.success('Google login successful')
+                  router.push('/dashboard')
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Google login failed')
+                } finally {
+                  setLoading(false)
+                }
+              },
+            }).requestAccessToken()
+          } else {
+            toast.error('Google sign-in failed to load. Please try again.')
+            setLoading(false)
+          }
+        }
+        script.onerror = () => {
+          toast.error('Could not load Google sign-in. Check your internet connection.')
+          setLoading(false)
+        }
+        document.head.appendChild(script)
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Google login failed')
