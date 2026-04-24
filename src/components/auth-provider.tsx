@@ -45,23 +45,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter()
 
   useEffect(() => {
-    // Check for existing session on mount
     checkAuthStatus()
   }, [])
 
   const checkAuthStatus = async () => {
     try {
-      // Validate session via cookie-based endpoint
       const response = await fetch('/api/auth/validate', { credentials: 'include' })
-
       if (response.ok) {
         const userData = await response.json()
         setUser(userData.user)
       } else {
         setUser(null)
       }
-    } catch (error) {
-      console.error('Auth check failed:', error)
+    } catch {
       setUser(null)
     } finally {
       setLoading(false)
@@ -74,17 +70,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.message || 'Login failed')
       }
-
       const data = await response.json()
       setUser(data.user)
       toast.success('Login successful')
@@ -97,86 +89,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
+  const handleGoogleToken = async (accessToken: string) => {
+    const authResponse = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ token: accessToken }),
+    })
+    if (!authResponse.ok) {
+      const err = await authResponse.json()
+      throw new Error(err.message || 'Google login failed')
+    }
+    const data = await authResponse.json()
+    setUser(data.user)
+    toast.success('Google login successful')
+    router.push('/')
+  }
+
   const loginWithGoogle = async () => {
     try {
       setLoading(true)
 
       if (!googleClientId) {
-        throw new Error('Google sign-in is not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID.')
+        throw new Error('Google sign-in is not configured.')
       }
-      
-      // Initialize Google OAuth
-      if (typeof window !== 'undefined' && window.google) {
-        window.google.accounts.oauth2.initTokenClient({
+
+      const initClient = (googleObj: any) => {
+        googleObj.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
           scope: 'email profile',
           prompt: 'select_account',
           callback: async (response: any) => {
             try {
-              // Send the Google token to our backend
-              const authResponse = await fetch('/api/auth/google', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({ token: response.access_token }),
-              })
-
-              if (!authResponse.ok) {
-                const error = await authResponse.json()
-                throw new Error(error.message || 'Google login failed')
-              }
-
-              const data = await authResponse.json()
-              // Cookie-based session is managed by server; no local storage
-              setUser(data.user)
-              toast.success('Google login successful')
-              router.push('/')
+              await handleGoogleToken(response.access_token)
             } catch (error) {
               toast.error(error instanceof Error ? error.message : 'Google login failed')
             } finally {
               setLoading(false)
             }
           },
-        }).requestAccessToken()
+        } as any).requestAccessToken()
+      }
+
+      if (typeof window !== 'undefined' && (window as any).google) {
+        initClient((window as any).google)
       } else {
-        // Fallback: use Google Identity Services popup via dynamic script load
+        // Dynamically load GSI script if not present
+        const existing = document.querySelector('script[src*="accounts.google.com/gsi"]')
+        if (existing) {
+          toast.error('Google sign-in is not ready yet. Please try again.')
+          setLoading(false)
+          return
+        }
         const script = document.createElement('script')
         script.src = 'https://accounts.google.com/gsi/client'
         script.onload = () => {
-          if (window.google) {
-            window.google.accounts.oauth2.initTokenClient({
-              client_id: googleClientId!,
-              scope: 'email profile',
-              prompt: 'select_account',
-              callback: async (response: any) => {
-                try {
-                  const authResponse = await fetch('/api/auth/google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ token: response.access_token }),
-                  })
-                  if (!authResponse.ok) throw new Error('Google login failed')
-                  const data = await authResponse.json()
-                  setUser(data.user)
-                  toast.success('Google login successful')
-                  router.push('/')
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : 'Google login failed')
-                } finally {
-                  setLoading(false)
-                }
-              },
-            }).requestAccessToken()
+          if ((window as any).google) {
+            initClient((window as any).google)
           } else {
-            toast.error('Google sign-in failed to load. Please try again.')
+            toast.error('Google sign-in failed to load.')
             setLoading(false)
           }
         }
         script.onerror = () => {
-          toast.error('Could not load Google sign-in. Check your internet connection.')
+          toast.error('Could not load Google sign-in.')
           setLoading(false)
         }
         document.head.appendChild(script)
@@ -188,12 +164,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   const logout = () => {
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      .finally(() => {
-        setUser(null)
-        toast.success('Logged out successfully')
-        router.push('/login')
-      })
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+      setUser(null)
+      toast.success('Logged out successfully')
+      router.push('/login')
+    })
   }
 
   const hasPermission = (permission: string): boolean => {
@@ -201,17 +176,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return user.permissions.includes(permission) || user.role === 'admin'
   }
 
-  const value: AuthContextType = {
-    user,
-    loading,
-    login,
-    loginWithGoogle,
-    logout,
-    hasPermission,
-  }
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, logout, hasPermission }}>
       {children}
     </AuthContext.Provider>
   )
