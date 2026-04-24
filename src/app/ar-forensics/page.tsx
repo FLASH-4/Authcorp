@@ -270,10 +270,6 @@ export default function ARForensicsPage() {
       console.error('AR camera playback failed:', error)
     })
 
-    return () => {
-      video.pause()
-      video.srcObject = null
-    }
   }, [cameraActive, cameraStream])
 
   const handleFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -314,7 +310,12 @@ export default function ARForensicsPage() {
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
+        video: {
+          facingMode: { ideal: 'user' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          aspectRatio: { ideal: 16/9 },
+        },
         audio: false,
       })
 
@@ -571,7 +572,8 @@ export default function ARForensicsPage() {
                       ref={videoRef}
                       autoPlay
                       playsInline
-                      className="absolute inset-0 h-full w-full object-cover opacity-70"
+                      muted
+                      className="absolute inset-0 h-full w-full object-contain opacity-90"
                     />
                   ) : (
                     <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.8),rgba(2,6,23,0.95))]">
