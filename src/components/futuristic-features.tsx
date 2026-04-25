@@ -640,7 +640,7 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
     const liveCanvasRef = useRef<HTMLCanvasElement>(null)
     const liveStreamRef = useRef<MediaStream | null>(null)
 
-    // Attach stream to video element after React re-renders
+    // Attach stream to video element once camera starts
     useEffect(() => {
       if (camOn && liveStreamRef.current && liveVideoRef.current) {
         const video = liveVideoRef.current
@@ -649,7 +649,7 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
           video.play().catch(() => {})
         }
       }
-    }, [camOn, capturedFrame])
+    }, [camOn])
 
     const startCam = async () => {
       setCamError(null)
@@ -767,11 +767,17 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           <div className="xl:col-span-2 space-y-3">
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900 aspect-video">
-              {camOn && !capturedFrame && (
-                <video ref={liveVideoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
-              )}
+              {/* Always render video so stream never gets killed by unmount */}
+              <video
+                ref={liveVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-contain ${capturedFrame || !camOn ? 'hidden' : 'block'}`}
+              />
               {capturedFrame && (
                 <div className="relative w-full h-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={capturedFrame} alt="Scan" className="w-full h-full object-contain" />
                   {overlayBoxes.map(box => {
                     const c = colorMap[box.color]

@@ -17,6 +17,7 @@ interface DocumentAnalysis {
   results?: AnalysisResults
   classification?: DocumentClassification
   blockedReason?: string
+  previewUrl?: string
 }
 
 interface AnalysisResults {
@@ -209,7 +210,7 @@ function forensicsReducer(state: ForensicsState, action: ForensicsAction): Foren
 interface ForensicsContextType {
   state: ForensicsState
   uploadDocument: (file: File) => Promise<string>
-  analyzeDocument: (documentId: string) => Promise<void>
+  analyzeDocument: (documentId: string) => Promise<any>
   setActiveDocument: (document: DocumentAnalysis | null) => void
   clearDocuments: () => void
   getDocumentById: (id: string) => DocumentAnalysis | undefined
@@ -255,6 +256,12 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
   const uploadDocument = async (file: File): Promise<string> => {
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     
+    // Generate preview URL for images
+    let previewUrl: string | undefined
+    if (file.type.startsWith('image/')) {
+      previewUrl = URL.createObjectURL(file)
+    }
+
     const document: DocumentAnalysis = {
       id: documentId,
       filename: file.name,
@@ -263,6 +270,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       uploadedAt: new Date(),
       status: 'uploading',
       progress: 0,
+      previewUrl,
     }
 
     dispatch({ type: 'ADD_DOCUMENT', payload: document })
@@ -299,7 +307,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
     }
   }
 
-  const analyzeDocument = async (documentId: string): Promise<void> => {
+  const analyzeDocument = async (documentId: string): Promise<any> => {
     dispatch({ type: 'START_ANALYSIS', payload: documentId })
 
     try {
@@ -454,7 +462,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         
         toast.error(`🚨 ${classification.type.toUpperCase()} BLOCKED - AI content detected in critical document`)
         console.warn(`Document blocked: ${classification.type} with AI confidence ${(aiDetectionResult.confidence * 100).toFixed(1)}%`)
-        return
+        return { results: mockResults, status: 'blocked' }
       }
 
       // Complete analysis for non-blocked documents
@@ -469,6 +477,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           } 
         }
       })
+      return { results: mockResults, status: 'completed' }
 
       // Emit analysis completed event for dashboard updates
       const updatedDocument = state.documents.find(doc => doc.id === documentId)

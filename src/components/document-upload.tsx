@@ -234,8 +234,13 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
                   className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
                 >
                   <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <FileIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                    <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                      {(document as any).previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={(document as any).previewUrl} alt={document.filename} className="w-full h-full object-cover" />
+                      ) : (
+                        <FileIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                      )}
                     </div>
                     
                     <div className="flex-1 min-w-0">
