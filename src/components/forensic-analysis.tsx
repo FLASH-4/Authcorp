@@ -25,7 +25,16 @@ type AnalysisMode = 'overview' | 'heatmap' | 'metadata' | 'text' | 'comparison'
 export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const { state } = useForensics()
   const [activeMode, setActiveMode] = useState<AnalysisMode>('overview')
-  const [selectedDocument, setSelectedDocument] = useState<any>(null)
+  const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
+  const [selectedDocument, setSelectedDocument] = useState<any>(() => completedDocs[0] || null)
+  
+  // Auto-select newest completed doc when list changes
+  useEffect(() => {
+    if (!selectedDocument && completedDocs.length > 0) {
+      setSelectedDocument(completedDocs[completedDocs.length - 1])
+    }
+  }, [state.documents, completedDocs, selectedDocument])
+  
   const analysisResults = data || selectedDocument?.results
 
   const completedDocuments = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
@@ -251,37 +260,82 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   }
 
   const renderHeatmap = () => {
-    if (!selectedDocument?.results?.heatmap) {
+    const results = analysisResults || selectedDocument?.results
+    const heatmap = results?.heatmap
+    const regions = heatmap?.suspiciousRegions || []
+
+    if (!heatmap && regions.length === 0) {
       return (
         <div className="text-center py-12">
           <ChartBarIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-white dark:text-white mb-2">
-            No Heatmap Data
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            Heatmap analysis is not available for this document.
-          </p>
+          <h3 className="text-lg font-medium text-white dark:text-white mb-2">No Heatmap Data</h3>
+          <p className="text-gray-600 dark:text-gray-400">Heatmap analysis is not available for this document.</p>
         </div>
       )
     }
 
+    const colorMap: Record<string, string> = {
+      text_modification: 'bg-red-500/60 border-red-400',
+      copy_move: 'bg-orange-500/60 border-orange-400',
+      compression_anomaly: 'bg-yellow-500/60 border-yellow-400',
+      minor_inconsistency: 'bg-blue-500/40 border-blue-400',
+    }
+
     return (
       <div className="space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
         >
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Tampering Heatmap
-          </h3>
-          <div className="relative bg-gray-100 dark:bg-gray-700 rounded-lg p-4 min-h-96">
-            <div className="text-center py-20">
-              <PhotoIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">
-                Interactive heatmap visualization would appear here
-              </p>
-            </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tampering Heatmap</h3>
+          <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ height: '420px' }}>
+            {/* Background grid */}
+            <div className="absolute inset-0 opacity-20"
+              style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '40px 40px' }}
+            />
+            {regions.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">✅</div>
+                  <p className="text-green-400 font-semibold text-lg">No Suspicious Regions Detected</p>
+                  <p className="text-gray-400 text-sm mt-1">Document passed heatmap analysis</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {regions.map((region: any, idx: number) => (
+                  <div key={idx}
+                    className={`absolute border-2 rounded ${colorMap[region.type] || 'bg-red-500/50 border-red-400'}`}
+                    style={{
+                      left: `${(region.x / 400) * 100}%`,
+                      top: `${(region.y / 560) * 100}%`,
+                      width: `${(region.width / 400) * 100}%`,
+                      height: `${(region.height / 560) * 100}%`,
+                    }}
+                  >
+                    <span className="absolute -top-6 left-0 text-xs text-white bg-black/70 px-1.5 py-0.5 rounded whitespace-nowrap">
+                      {(region.type || 'anomaly').replace(/_/g, ' ')} — {Math.round(region.confidence * 100)}%
+                    </span>
+                  </div>
+                ))}
+                <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-black/60 px-2 py-1 rounded">
+                  {regions.length} suspicious region{regions.length !== 1 ? 's' : ''} flagged
+                </div>
+              </>
+            )}
+          </div>
+          {/* Legend */}
+          <div className="mt-4 flex flex-wrap gap-3">
+            {[
+              { color: 'bg-red-500', label: 'Text modification' },
+              { color: 'bg-orange-500', label: 'Copy-move detection' },
+              { color: 'bg-yellow-500', label: 'Compression anomaly' },
+              { color: 'bg-blue-500', label: 'Minor inconsistency' },
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                <div className={`w-3 h-3 rounded-sm ${item.color} opacity-70`} />
+                {item.label}
+              </div>
+            ))}
           </div>
         </motion.div>
       </div>
@@ -520,7 +574,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
             className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Select Document</option>
-            {state.documents.filter(doc => doc.status === 'completed').map(doc => (
+            {state.documents.filter(doc => doc.status === 'completed' || doc.status === 'blocked').map(doc => (
               <option key={doc.id} value={doc.id}>
                 {doc.filename}
               </option>

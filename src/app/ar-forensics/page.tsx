@@ -257,6 +257,7 @@ export default function LiveScannerPage() {
             {/* Captured frame + AR overlays */}
             {capturedFrame && (
               <div className="relative w-full h-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={capturedFrame} alt="Scanned frame" className="w-full h-full object-contain" />
                 <AnimatePresence>
                   {overlays.map(box => {
