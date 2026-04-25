@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import toast from 'react-hot-toast'
 import {
   CubeTransparentIcon,
   ChatBubbleLeftRightIcon,
@@ -130,7 +131,7 @@ const suggestionToneStyles: Record<'blue' | 'emerald' | 'amber' | 'violet', stri
 }
 
 export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) {
-  const { state } = useForensics()
+  const { state, uploadDocument, analyzeDocument } = useForensics()
   const [activeFeature, setActiveFeature] = useState<FeatureMode>('ar')
   const [isARActive, setIsARActive] = useState(false)
   const [liveStats, setLiveStats] = useState<RealTimeStats | null>(null)
@@ -628,16 +629,16 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
   }, [cameraStream, isARActive])
 
   const ARForensics = () => {
-    const [camOn, setCamOn] = React.useState(false)
-    const [scanning, setScanning] = React.useState(false)
-    const [scanResult, setScanResult] = React.useState<any>(null)
-    const [overlayBoxes, setOverlayBoxes] = React.useState<any[]>([])
-    const [capturedFrame, setCapturedFrame] = React.useState<string | null>(null)
-    const [camError, setCamError] = React.useState<string | null>(null)
-    const [scanCount, setScanCount] = React.useState(0)
-    const liveVideoRef = React.useRef<HTMLVideoElement>(null)
-    const liveCanvasRef = React.useRef<HTMLCanvasElement>(null)
-    const liveStreamRef = React.useRef<MediaStream | null>(null)
+    const [camOn, setCamOn] = useState(false)
+    const [scanning, setScanning] = useState(false)
+    const [scanResult, setScanResult] = useState<any>(null)
+    const [overlayBoxes, setOverlayBoxes] = useState<any[]>([])
+    const [capturedFrame, setCapturedFrame] = useState<string | null>(null)
+    const [camError, setCamError] = useState<string | null>(null)
+    const [scanCount, setScanCount] = useState(0)
+    const liveVideoRef = useRef<HTMLVideoElement>(null)
+    const liveCanvasRef = useRef<HTMLCanvasElement>(null)
+    const liveStreamRef = useRef<MediaStream | null>(null)
 
     const startCam = async () => {
       setCamError(null)
