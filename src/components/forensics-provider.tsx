@@ -341,41 +341,91 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const isHighRisk = isHighRiskDocument(classification.type)
       const shouldBlock = aiDetectionResult.isAIGenerated && isHighRisk && aiDetectionResult.confidence > 0.8
       
-      const mockResults: AnalysisResults = {
+      const authScore = calculateContextualScore(aiDetectionResult, classification)
+      const isManipulated = authScore < 60
+      const isSuspicious = authScore < 80
+
+      const mockResults: any = {
         authenticity: {
-          score: calculateContextualScore(aiDetectionResult, classification),
+          score: authScore,
           confidence: aiDetectionResult.confidence * 100,
           category: determineCategory(aiDetectionResult, classification),
           reasoning: generateContextualReasoning(aiDetectionResult, classification)
         },
         forensics: {
           imageForensics: {
-            errorLevelAnalysis: Math.random() * 100,
-            noiseAnalysis: Math.random() * 100,
-            compressionArtifacts: Math.random() > 0.8,
-            copyMoveDetection: Math.random() > 0.9
+            errorLevelAnalysis: isManipulated ? 72 + Math.random() * 20 : 8 + Math.random() * 15,
+            noiseAnalysis: isManipulated ? 65 + Math.random() * 25 : 5 + Math.random() * 12,
+            compressionArtifacts: isManipulated,
+            copyMoveDetection: authScore < 50
           },
           metadataAnalysis: {
             exifData: {
               'Camera Make': 'Canon',
               'Camera Model': 'EOS R5',
-              'Date Taken': '2024-01-15 14:30:22'
+              'Software': isManipulated ? 'Adobe Photoshop 2024' : 'Camera Firmware v2.1',
+              'Date Taken': new Date(Date.now() - 86400000 * 30).toISOString(),
+              'GPS Latitude': '28.6139° N',
+              'GPS Longitude': '77.2090° E',
+              'Resolution': '72 dpi',
+              'Color Space': 'sRGB',
+              'Orientation': 'Normal',
+              'Flash': 'No Flash'
             },
-            creationDate: '2024-01-15T14:30:22Z',
-            tamperingClues: []
+            creationDate: new Date(Date.now() - 86400000 * 30).toISOString(),
+            editingSoftware: isManipulated ? 'Adobe Photoshop 2024' : undefined,
+            tamperingClues: isManipulated
+              ? ['Editing software detected in metadata', 'Timestamp inconsistency found', 'GPS data stripped after creation']
+              : isSuspicious
+              ? ['Minor metadata inconsistency detected']
+              : []
+          },
+          textAnalysis: {
+            extractedText: `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${authScore.toFixed(1)}%\nClassification: ${determineCategory(aiDetectionResult, classification)}`,
+            confidence: aiDetectionResult.confidence * 100,
+            fontConsistency: isManipulated ? 45 + Math.random() * 20 : 85 + Math.random() * 12,
+            alignmentScore: isManipulated ? 55 : 92,
+            alignmentIssues: isManipulated
+              ? ['Baseline shift detected in paragraph 2', 'Character spacing inconsistency in header']
+              : [],
+            anomalies: isManipulated
+              ? ['Mixed font families detected', 'Pixel-level text inconsistency']
+              : [],
+            signatureVerification: {
+              isValid: !isManipulated,
+              confidence: isManipulated ? 35 : 91
+            }
           }
         },
         heatmap: {
-          suspiciousRegions: [
+          suspiciousRegions: isManipulated
+            ? [
+                { x: 80, y: 120, width: 240, height: 80, confidence: 0.82, type: 'text_modification' },
+                { x: 200, y: 300, width: 160, height: 60, confidence: 0.71, type: 'copy_move' },
+                { x: 50, y: 400, width: 300, height: 50, confidence: 0.65, type: 'compression_anomaly' }
+              ]
+            : isSuspicious
+            ? [{ x: 100, y: 150, width: 180, height: 70, confidence: 0.55, type: 'minor_inconsistency' }]
+            : []
+        },
+        riskIntelligence: {
+          personRiskScore: isManipulated ? 65 + Math.random() * 30 : 5 + Math.random() * 20,
+          riskCategory: isManipulated ? 'high' : isSuspicious ? 'medium' : 'low',
+          findings: ([
             {
-              x: 100,
-              y: 150,
-              width: 200,
-              height: 100,
-              confidence: 0.75,
-              type: 'text_modification'
+              type: 'background_check',
+              description: isManipulated ? 'Document anomalies suggest potential fraud' : 'No adverse findings in background check',
+              confidence: 90,
+              source: 'AuthCorp Forensics Engine'
+            },
+            {
+              type: 'database_check',
+              description: 'No matches found in sanctions or watchlists',
+              confidence: 95,
+              source: 'Sanctions Database'
             }
-          ]
+          ] as any),
+          databases: ['Criminal Records', 'Sanctions Lists', 'Fraud Database', 'Data Breach Records']
         }
       }
 
