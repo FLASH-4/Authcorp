@@ -640,6 +640,17 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
     const liveCanvasRef = useRef<HTMLCanvasElement>(null)
     const liveStreamRef = useRef<MediaStream | null>(null)
 
+    // Attach stream to video element after React re-renders
+    useEffect(() => {
+      if (camOn && liveStreamRef.current && liveVideoRef.current) {
+        const video = liveVideoRef.current
+        if (video.srcObject !== liveStreamRef.current) {
+          video.srcObject = liveStreamRef.current
+          video.play().catch(() => {})
+        }
+      }
+    }, [camOn, capturedFrame])
+
     const startCam = async () => {
       setCamError(null)
       try {
