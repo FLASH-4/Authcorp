@@ -30,7 +30,7 @@ const ACCEPTED_FILE_TYPES = {
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
-  const { state, uploadDocument, analyzeDocument, setActiveDocument } = useForensics()
+  const { state, uploadDocument, analyzeDocument, setActiveDocument, removeDocument } = useForensics()
   const [dragActive, setDragActive] = useState(false)
 
   // Let the provider handle the upload first, then kick off analysis in the background.
@@ -217,7 +217,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
       {/* Document List */}
       {state.documents.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-lg font-semibold text-white dark:text-white">
             Uploaded Documents ({state.documents.length})
           </h3>
           
@@ -341,6 +341,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
                              onClick={() => {
                                setActiveDocument(document)
                                onAnalysisComplete?.(document.results)
+                               window.dispatchEvent(new CustomEvent('navigate-to-forensics', { detail: { document } }))
                              }}
                              className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                              title="Quick View"
@@ -376,6 +377,10 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
                        <motion.button
                          whileHover={{ scale: 1.05 }}
                          whileTap={{ scale: 0.95 }}
+                         onClick={() => {
+                           removeDocument(document.id)
+                           toast.success('Document removed')
+                         }}
                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                          title="Remove"
                        >

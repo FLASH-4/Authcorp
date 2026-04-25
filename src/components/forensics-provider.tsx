@@ -90,6 +90,7 @@ type ForensicsAction =
   | { type: 'COMPLETE_ANALYSIS'; payload: { id: string; results: AnalysisResults } }
   | { type: 'FAIL_ANALYSIS'; payload: { id: string; error: string } }
   | { type: 'CLEAR_DOCUMENTS' }
+  | { type: 'REMOVE_DOCUMENT'; payload: string }
 
 const initialState: ForensicsState = {
   documents: [],
@@ -134,7 +135,13 @@ function forensicsReducer(state: ForensicsState, action: ForensicsAction): Foren
         documents: [...state.documents, action.payload],
       }
     
-    case 'UPDATE_DOCUMENT':
+    case 'REMOVE_DOCUMENT':
+        return {
+          ...state,
+          documents: state.documents.filter(doc => doc.id !== action.payload),
+          activeDocument: state.activeDocument?.id === action.payload ? null : state.activeDocument
+        }
+      case 'UPDATE_DOCUMENT':
       return {
         ...state,
         documents: state.documents.map(doc =>
@@ -206,6 +213,7 @@ interface ForensicsContextType {
   setActiveDocument: (document: DocumentAnalysis | null) => void
   clearDocuments: () => void
   getDocumentById: (id: string) => DocumentAnalysis | undefined
+  removeDocument: (id: string) => void
 }
 
 const ForensicsContext = createContext<ForensicsContextType | undefined>(undefined)
@@ -557,6 +565,10 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
     dispatch({ type: 'SET_ACTIVE_DOCUMENT', payload: document })
   }
 
+  const removeDocument = (id: string) => {
+    dispatch({ type: 'REMOVE_DOCUMENT', payload: id })
+  }
+
   const clearDocuments = () => {
     dispatch({ type: 'CLEAR_DOCUMENTS' })
   }
@@ -627,6 +639,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
     setActiveDocument,
     clearDocuments,
     getDocumentById,
+    removeDocument,
   }
 
   return (

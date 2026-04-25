@@ -26,15 +26,16 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const { state } = useForensics()
   const [activeMode, setActiveMode] = useState<AnalysisMode>('overview')
   const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
-  const [selectedDocument, setSelectedDocument] = useState<any>(() => completedDocs[0] || null)
+  const [selectedDocId, setSelectedDocId] = useState<string>('')
   
   // Auto-select newest completed doc when list changes
   useEffect(() => {
-    if (!selectedDocument && completedDocs.length > 0) {
-      setSelectedDocument(completedDocs[completedDocs.length - 1])
+    if (!selectedDocId && completedDocs.length > 0) {
+      setSelectedDocId(completedDocs[completedDocs.length - 1].id)
     }
-  }, [state.documents, completedDocs, selectedDocument])
-  
+  }, [completedDocs.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedDocument = completedDocs.find(d => d.id === selectedDocId) || completedDocs[completedDocs.length - 1] || null
   const analysisResults = data || selectedDocument?.results
 
   const completedDocuments = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
@@ -56,11 +57,11 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const isModeAvailable = (mode: AnalysisMode) => {
     switch (mode) {
       case 'heatmap':
-        return Boolean(analysisResults?.heatmap || selectedDocument?.results?.heatmap)
+        return true // always show tab, render empty state inside
       case 'metadata':
-        return Boolean(analysisResults?.forensics?.metadataAnalysis || selectedDocument?.results?.forensics?.metadataAnalysis)
+        return true
       case 'text':
-        return Boolean(analysisResults?.forensics?.textAnalysis || selectedDocument?.results?.forensics?.textAnalysis)
+        return true
       case 'comparison':
         return completedDocuments.length > 1
       default:
@@ -566,11 +567,8 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
         
         {state.documents.length > 0 && (
           <select
-            value={selectedDocument?.id || ''}
-            onChange={(e) => {
-              const doc = state.documents.find(d => d.id === e.target.value)
-              setSelectedDocument(doc || null)
-            }}
+            value={selectedDocId}
+            onChange={(e) => setSelectedDocId(e.target.value)}
             className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Select Document</option>
