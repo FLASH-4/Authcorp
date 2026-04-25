@@ -108,6 +108,29 @@ export function Dashboard({ analysisData }: DashboardProps) {
     }
   }
 
+  // Update activity feed when session documents change
+  useEffect(() => {
+    const sessionActivity: RecentActivity[] = state.documents
+      .filter(d => d.status === 'completed' || d.status === 'blocked')
+      .map(d => ({
+        id: d.id,
+        type: 'analysis' as const,
+        document: d.filename,
+        result: d.results?.authenticity?.category || 'authentic',
+        confidence: d.results?.authenticity?.confidence || 75,
+        time: 'Just now',
+        userId: 'current-user',
+        riskLevel: ((d.results?.authenticity?.score || 75) > 70 ? 'low' : (d.results?.authenticity?.score || 75) > 40 ? 'medium' : 'high') as 'low' | 'medium' | 'high'
+      }))
+      .reverse()
+    if (sessionActivity.length > 0) {
+      setRecentActivity(prev => {
+        const dbActivity = prev.filter(a => !state.documents.find(d => d.id === a.id))
+        return [...sessionActivity, ...dbActivity].slice(0, 10)
+      })
+    }
+  }, [state.documents])
+
   // Load real-time data
   useEffect(() => {
     const loadData = async () => {
@@ -121,7 +144,23 @@ export function Dashboard({ analysisData }: DashboardProps) {
         ])
         
         setRealTimeStats(stats)
-        setRecentActivity(activity)
+
+        // Merge DB activity with current session documents
+        const sessionActivity: RecentActivity[] = state.documents
+          .filter(d => d.status === 'completed' || d.status === 'blocked')
+          .map(d => ({
+            id: d.id,
+            type: 'analysis' as const,
+            document: d.filename,
+            result: d.results?.authenticity?.category || 'authentic',
+            confidence: d.results?.authenticity?.confidence || 75,
+            time: 'Just now',
+            userId: 'current-user',
+            riskLevel: ((d.results?.authenticity?.score || 75) > 70 ? 'low' : (d.results?.authenticity?.score || 75) > 40 ? 'medium' : 'high') as 'low' | 'medium' | 'high'
+          }))
+          .reverse()
+
+        setRecentActivity([...sessionActivity, ...activity].slice(0, 10))
         setTrendData(trends)
         setSystemHealth(health)
       } catch (error) {

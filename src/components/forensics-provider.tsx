@@ -256,10 +256,18 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
   const uploadDocument = async (file: File): Promise<string> => {
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     
-    // Generate preview URL for images
+    // Generate persistent base64 preview for images
     let previewUrl: string | undefined
     if (file.type.startsWith('image/')) {
-      previewUrl = URL.createObjectURL(file)
+      try {
+        const buffer = await file.arrayBuffer()
+        const base64 = btoa(
+          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        )
+        previewUrl = `data:${file.type};base64,${base64}`
+      } catch {
+        previewUrl = URL.createObjectURL(file)
+      }
     }
 
     const document: DocumentAnalysis = {

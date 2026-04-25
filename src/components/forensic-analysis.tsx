@@ -30,8 +30,11 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   
   // Auto-select newest completed doc when list changes
   useEffect(() => {
-    if (!selectedDocId && completedDocs.length > 0) {
-      setSelectedDocId(completedDocs[completedDocs.length - 1].id)
+    if (completedDocs.length > 0) {
+      const latest = completedDocs[completedDocs.length - 1]
+      if (!selectedDocId || !completedDocs.find(d => d.id === selectedDocId)) {
+        setSelectedDocId(latest.id)
+      }
     }
   }, [completedDocs.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -569,7 +572,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
           <select
             value={selectedDocId}
             onChange={(e) => setSelectedDocId(e.target.value)}
-            className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Select Document</option>
             {state.documents.filter(doc => doc.status === 'completed' || doc.status === 'blocked').map(doc => (
