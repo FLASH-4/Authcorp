@@ -217,7 +217,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
       {/* Document List */}
       {state.documents.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-white dark:text-white">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Uploaded Documents ({state.documents.length})
           </h3>
           

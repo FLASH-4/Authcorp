@@ -234,6 +234,7 @@ interface ForensicsProviderProps {
 export function ForensicsProvider({ children }: ForensicsProviderProps) {
   const [state, dispatch] = useReducer(forensicsReducer, initialState)
   const previewUrlMap = useRef<Record<string, string>>({})
+  const documentRegistry = useRef<Record<string, DocumentAnalysis>>({})
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
@@ -286,6 +287,8 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       previewUrl,
     }
 
+    // Store in registry so analyzeDocument can find it even with stale state closure
+    documentRegistry.current[documentId] = document
     dispatch({ type: 'ADD_DOCUMENT', payload: document })
 
     try {
@@ -324,7 +327,8 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
     dispatch({ type: 'START_ANALYSIS', payload: documentId })
 
     try {
-      const document = state.documents.find(doc => doc.id === documentId)
+      // Use registry to avoid stale state closure issue
+      const document = documentRegistry.current[documentId] || state.documents.find(doc => doc.id === documentId)
       if (!document) {
         throw new Error('Document not found')
       }
@@ -509,6 +513,15 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       }
 
       // Complete analysis for non-blocked documents
+      console.log('Analysis complete for', documentId, {
+        score: mockResults.authenticity?.score,
+        category: mockResults.authenticity?.category,
+        hasHeatmap: Boolean(mockResults.heatmap?.suspiciousRegions?.length),
+        hasMetadata: Boolean(mockResults.forensics?.metadataAnalysis),
+        hasText: Boolean(mockResults.forensics?.textAnalysis?.extractedText),
+        visionUsed: Boolean(visionResult),
+        visionSource: visionResult?.source
+      })
       dispatch({
         type: 'UPDATE_DOCUMENT',
         payload: { 
