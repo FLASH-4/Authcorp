@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { dataService } from '@/lib/data-service'
 import { DocumentClassifier, DocumentClassification } from '@/lib/document-classifier'
@@ -233,6 +233,7 @@ interface ForensicsProviderProps {
 
 export function ForensicsProvider({ children }: ForensicsProviderProps) {
   const [state, dispatch] = useReducer(forensicsReducer, initialState)
+  const previewUrlMap = useRef<Record<string, string>>({})
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
@@ -265,6 +266,8 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
         )
         previewUrl = `data:${file.type};base64,${base64}`
+        // Store for vision analysis
+        previewUrlMap.current[documentId] = previewUrl
       } catch {
         previewUrl = URL.createObjectURL(file)
       }
@@ -350,6 +353,27 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         })
       }
 
+      // Call OpenAI Vision API for real image analysis
+      let visionResult: any = null
+      const storedPreview = previewUrlMap.current[documentId]
+      if (storedPreview && storedPreview.startsWith('data:')) {
+        try {
+          const base64 = storedPreview.split(',')[1]
+          const mimeType = storedPreview.split(';')[0].split(':')[1]
+          const visionResponse = await fetch('/api/documents/vision-analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ imageBase64: base64, mimeType })
+          })
+          if (visionResponse.ok) {
+            visionResult = await visionResponse.json()
+          }
+        } catch (e) {
+          console.warn('Vision analysis failed, using fallback:', e)
+        }
+      }
+
       // INTELLIGENT ANALYSIS with document-specific detection
       const aiDetectionResult = await AIDetectionEngine.detectAIGeneration(
         'mock_image_data',
@@ -365,16 +389,19 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const isHighRisk = isHighRiskDocument(classification.type)
       const shouldBlock = aiDetectionResult.isAIGenerated && isHighRisk && aiDetectionResult.confidence > 0.8
       
-      const authScore = calculateContextualScore(aiDetectionResult, classification)
-      const isManipulated = authScore < 60
+      // Use real vision score if available, otherwise fall back to mock
+      const authScore = visionResult
+        ? visionResult.authenticityScore
+        : calculateContextualScore(aiDetectionResult, classification)
+      const isManipulated = visionResult ? visionResult.isManipulated : authScore < 60
       const isSuspicious = authScore < 80
 
       const mockResults: any = {
         authenticity: {
           score: authScore,
-          confidence: aiDetectionResult.confidence * 100,
-          category: determineCategory(aiDetectionResult, classification),
-          reasoning: generateContextualReasoning(aiDetectionResult, classification)
+          confidence: visionResult ? visionResult.confidence : aiDetectionResult.confidence * 100,
+          category: visionResult ? visionResult.category : determineCategory(aiDetectionResult, classification),
+          reasoning: visionResult ? visionResult.reasoning : generateContextualReasoning(aiDetectionResult, classification)
         },
         forensics: {
           imageForensics: {
@@ -398,14 +425,18 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             },
             creationDate: new Date(Date.now() - 86400000 * 30).toISOString(),
             editingSoftware: isManipulated ? 'Adobe Photoshop 2024' : undefined,
-            tamperingClues: isManipulated
+            tamperingClues: visionResult?.metadata?.tamperingClues?.length > 0
+              ? visionResult.metadata.tamperingClues
+              : isManipulated
               ? ['Editing software detected in metadata', 'Timestamp inconsistency found', 'GPS data stripped after creation']
               : isSuspicious
               ? ['Minor metadata inconsistency detected']
               : []
           },
           textAnalysis: {
-            extractedText: `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${authScore.toFixed(1)}%\nClassification: ${determineCategory(aiDetectionResult, classification)}`,
+            extractedText: visionResult?.extractedText
+              ? visionResult.extractedText + `\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\nAuthenticity Score: ${authScore.toFixed(1)}%`
+              : `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${authScore.toFixed(1)}%`,
             confidence: aiDetectionResult.confidence * 100,
             fontConsistency: isManipulated ? 45 + Math.random() * 20 : 85 + Math.random() * 12,
             alignmentScore: isManipulated ? 55 : 92,
@@ -422,7 +453,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           }
         },
         heatmap: {
-          suspiciousRegions: isManipulated
+          suspiciousRegions: (visionResult?.heatmapRegions?.length > 0) ? visionResult.heatmapRegions : isManipulated
             ? [
                 { x: 80, y: 120, width: 240, height: 80, confidence: 0.82, type: 'text_modification' },
                 { x: 200, y: 300, width: 160, height: 60, confidence: 0.71, type: 'copy_move' },
