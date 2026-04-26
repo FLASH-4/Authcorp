@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { Dialog, Menu, Transition } from '@headlessui/react'
 import { useAuth } from '@/components/auth-provider'
+import { useForensics } from '@/components/forensics-provider'
 import { dataService, type RecentActivity, type RealTimeStats, type SystemHealth } from '@/lib/data-service'
 import toast from 'react-hot-toast'
 
@@ -110,12 +111,34 @@ const buildNotifications = (
 
 export function Header() {
   const { user, logout } = useAuth()
+  const { state: forensicsState } = useForensics()
   const router = useRouter()
   const [notifications, setNotifications] = useState<HeaderNotification[]>([])
   const [liveStats, setLiveStats] = useState<RealTimeStats | null>(null)
   const [liveHealth, setLiveHealth] = useState<SystemHealth | null>(null)
   const [activePanel, setActivePanel] = useState<'profile' | 'preferences' | null>(null)
   const notificationCount = notifications.length
+
+  // Update notifications from session documents
+  useEffect(() => {
+    const sessionDocs = forensicsState.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
+    if (sessionDocs.length > 0) {
+      const sessionNotifications: HeaderNotification[] = sessionDocs.slice(-3).reverse().map(doc => ({
+        id: doc.id,
+        title: doc.status === 'blocked' ? 'Document Blocked' : 'Analysis Complete',
+        message: doc.status === 'blocked'
+          ? `${doc.filename} blocked — AI/deepfake content detected`
+          : `${doc.filename} — ${doc.results?.authenticity?.category || 'authentic'} (${Math.round(doc.results?.authenticity?.score || 75)}% authentic)`,
+        time: 'Just now',
+        type: (doc.status === 'blocked' ? 'error' : 
+              (doc.results?.authenticity?.score || 100) < 60 ? 'warning' : 'success') as NotificationTone,
+      }))
+      setNotifications(prev => {
+        const dbNotifs = prev.filter(n => !forensicsState.documents.find(d => d.id === n.id))
+        return [...sessionNotifications, ...dbNotifs].slice(0, 10)
+      })
+    }
+  }, [forensicsState.documents])
 
   useEffect(() => {
     let mounted = true
@@ -170,8 +193,14 @@ export function Header() {
         ? 'Degraded'
         : 'All Systems Operational'
     : 'Loading Status'
-  const activeAnalyses = liveStats?.activeAnalyses ?? 0
-  const deepfakesDetected = liveStats?.deepfakesDetected ?? 0
+  // Use session documents to populate live stats
+  const sessionAnalyzing = forensicsState.documents.filter(d => d.status === 'analyzing').length
+  const sessionCompleted = forensicsState.documents.filter(d => d.status === 'completed' || d.status === 'blocked').length
+  const sessionDeepfakes = forensicsState.documents.filter(d => 
+    d.status === 'blocked' || (d.results?.authenticity?.category === 'ai-generated')
+  ).length
+  const activeAnalyses = sessionAnalyzing || (liveStats?.activeAnalyses ?? 0)
+  const deepfakesDetected = sessionDeepfakes || (liveStats?.deepfakesDetected ?? 0)
   const activePanelTitle = activePanel === 'profile' ? 'Profile Settings' : 'System Preferences'
   const activePanelDescription = activePanel === 'profile'
     ? 'Review the current signed-in account details and copy the account email.'
