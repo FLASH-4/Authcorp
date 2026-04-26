@@ -491,8 +491,15 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
 
   const renderMetadata = () => {
     const results = analysisResults || selectedDocument?.results
+    const meta = results?.forensics?.metadataAnalysis
     
-    if (!results?.forensics?.metadataAnalysis) {
+    // Build metadata from whatever source is available
+    const exifData = meta?.exifData || {}
+    const tamperingClues = meta?.tamperingClues || []
+    const editingSoftware = meta?.editingSoftware
+    const creationDate = meta?.creationDate || selectedDocument?.uploadedAt?.toISOString()
+    
+    if (!meta && !creationDate) {
       return (
         <div className="text-center py-12">
           <InformationCircleIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
@@ -520,7 +527,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
             <div>
               <h4 className="font-medium text-gray-900 dark:text-white mb-3">EXIF Data</h4>
               <div className="space-y-2">
-                {Object.entries(results.forensics.metadataAnalysis.exifData).map(([key, value]) => (
+                {Object.entries(exifData).map(([key, value]) => (
                   <div key={key} className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">{key}:</span>
                     <span className="text-gray-900 dark:text-white font-mono text-sm">{String(value)}</span>
@@ -534,7 +541,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Created:</span>
                   <span className="text-gray-900 dark:text-white font-mono text-sm">
-                    {new Date(results.forensics.metadataAnalysis.creationDate).toLocaleString()}
+                    {creationDate ? new Date(creationDate).toLocaleString() : 'Unknown'}
                   </span>
                 </div>
               </div>

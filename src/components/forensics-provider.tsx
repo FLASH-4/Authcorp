@@ -261,11 +261,13 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
     let previewUrl: string | undefined
     if (file.type.startsWith('image/')) {
       try {
-        const buffer = await file.arrayBuffer()
-        const base64 = btoa(
-          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        )
-        previewUrl = `data:${file.type};base64,${base64}`
+        // Use FileReader for reliable base64 conversion
+        previewUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
         // Store for vision analysis
         previewUrlMap.current[documentId] = previewUrl
       } catch {
@@ -387,7 +389,9 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       
       // INTELLIGENT RESULTS based on document type and context
       const isHighRisk = isHighRiskDocument(classification.type)
-      const shouldBlock = aiDetectionResult.isAIGenerated && isHighRisk && aiDetectionResult.confidence > 0.8
+      // Only block if BOTH AI detection AND vision analysis agree it's problematic
+      const visionSaysAuthentic = visionResult && visionResult.authenticityScore > 60
+      const shouldBlock = aiDetectionResult.isAIGenerated && isHighRisk && aiDetectionResult.confidence > 0.8 && !visionSaysAuthentic
       
       // Use real vision score if available, otherwise fall back to mock
       const authScore = visionResult
