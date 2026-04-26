@@ -130,6 +130,288 @@ const suggestionToneStyles: Record<'blue' | 'emerald' | 'amber' | 'violet', stri
   violet: 'from-violet-500/20 to-fuchsia-500/20 border-violet-400/30 text-black',
 }
 
+function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument: any, analyzeDocument: any }) {
+  const [camOn, setCamOn] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<any>(null)
+  const [overlayBoxes, setOverlayBoxes] = useState<any[]>([])
+  const [capturedFrame, setCapturedFrame] = useState<string | null>(null)
+  const [camError, setCamError] = useState<string | null>(null)
+  const [scanCount, setScanCount] = useState(0)
+  const liveVideoRef = useRef<HTMLVideoElement>(null)
+  const liveCanvasRef = useRef<HTMLCanvasElement>(null)
+  const liveStreamRef = useRef<MediaStream | null>(null)
+
+  // Attach stream to video element once camera starts
+  useEffect(() => {
+    if (camOn && liveStreamRef.current && liveVideoRef.current) {
+      const video = liveVideoRef.current
+      if (video.srcObject !== liveStreamRef.current) {
+        video.srcObject = liveStreamRef.current
+        video.play().catch(() => {})
+      }
+    }
+  }, [camOn])
+
+  const startCam = async () => {
+    setCamError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+      liveStreamRef.current = stream
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = stream
+        await liveVideoRef.current.play()
+      }
+      setCamOn(true)
+      setScanResult(null)
+      setOverlayBoxes([])
+      setCapturedFrame(null)
+    } catch (err: any) {
+      const msg = err.name === 'NotAllowedError'
+        ? 'Camera permission denied. Please allow camera access in browser settings.'
+        : 'Could not access camera.'
+      setCamError(msg)
+      toast.error('Camera access failed')
+    }
+  }
+
+  const stopCam = () => {
+    liveStreamRef.current?.getTracks().forEach(t => t.stop())
+    liveStreamRef.current = null
+    if (liveVideoRef.current) liveVideoRef.current.srcObject = null
+    setCamOn(false)
+    setScanResult(null)
+    setOverlayBoxes([])
+    setCapturedFrame(null)
+  }
+
+  const doScan = async () => {
+    if (!camOn || scanning) return
+    setScanning(true)
+    setScanResult(null)
+    setOverlayBoxes([])
+    try {
+      toast.loading('Capturing frame...', { id: 'livescan' })
+      const video = liveVideoRef.current
+      const canvas = liveCanvasRef.current
+      if (!video || !canvas) throw new Error('No video')
+      canvas.width = video.videoWidth || 1280
+      canvas.height = video.videoHeight || 720
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+      setCapturedFrame(dataUrl)
+      const blob = await new Promise<Blob>((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('blob fail')), 'image/jpeg', 0.92))
+
+      toast.loading('Analysing document...', { id: 'livescan' })
+      const file = new File([blob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      const docId = await uploadDocument(file)
+      const raw = await analyzeDocument(docId) as any
+      const auth = raw?.results?.authenticity || {}
+      const risk = raw?.results?.riskIntelligence || {}
+      const score = auth.score ?? Math.round(Math.random() * 35 + 55)
+
+      const result = {
+        score,
+        confidence: auth.confidence ?? 85,
+        verdict: score > 70 ? 'Authentic' : score > 40 ? 'Suspicious' : 'Tampered',
+        verdictColor: score > 70 ? 'text-emerald-400' : score > 40 ? 'text-amber-400' : 'text-red-400',
+        riskLevel: risk.riskCategory ?? (score > 70 ? 'Low' : score > 40 ? 'Medium' : 'High'),
+        riskScore: risk.personRiskScore ?? Math.round((100 - score) * 0.8),
+        recommendation: score > 70 ? 'Document appears authentic. Proceed.' : score > 40 ? 'Flag for manual review.' : 'Reject — manipulation detected.',
+        evidence: raw?.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
+        time: raw?.processingTime ?? 1.4,
+      }
+      setScanResult(result)
+
+      const boxes = score > 70
+        ? [{ id: 'doc', label: `Authentic ${Math.round(score)}%`, x: 15, y: 10, w: 70, h: 78, color: 'emerald' }]
+        : score > 40
+        ? [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'amber' }, { id: 'w', label: 'Suspicious Region', x: 25, y: 38, w: 40, h: 18, color: 'amber' }]
+        : [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'red' }, { id: 'f', label: 'Manipulation Detected', x: 20, y: 28, w: 50, h: 22, color: 'red' }]
+      setOverlayBoxes(boxes)
+      setScanCount(c => c + 1)
+
+      toast.success(
+        score > 70 ? '✅ Authentic' : score > 40 ? '⚠️ Suspicious' : '🚨 Tampered!',
+        { id: 'livescan', duration: 4000 }
+      )
+    } catch (err) {
+      toast.error('Scan failed. Try again.', { id: 'livescan' })
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const colorMap: any = {
+    emerald: { border: 'border-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-900/80' },
+    amber:   { border: 'border-amber-400',   text: 'text-amber-300',   bg: 'bg-amber-900/80'   },
+    red:     { border: 'border-red-400',     text: 'text-red-300',     bg: 'bg-red-900/80'     },
+  }
+
+  return (
+    <div className="min-h-[600px] bg-[#0a0f1e] rounded-2xl text-white p-4 md:p-6">
+      <canvas ref={liveCanvasRef} className="hidden" />
+      <div className="mb-5 flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
+          <EyeIcon className="w-6 h-6 text-cyan-400" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">Live Document Scanner</h2>
+          <p className="text-xs text-slate-400">Point camera at a document → click Scan → get AI forensic analysis</p>
+        </div>
+        {scanCount > 0 && <span className="ml-auto text-xs text-slate-500">{scanCount} scan{scanCount !== 1 ? 's' : ''} done</span>}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <div className="xl:col-span-2 space-y-3">
+          <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900 aspect-video">
+            {/* Always render video so stream never gets killed by unmount */}
+            <video
+              ref={liveVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-contain ${capturedFrame || !camOn ? 'hidden' : 'block'}`}
+            />
+            {capturedFrame && (
+              <div className="relative w-full h-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={capturedFrame} alt="Scan" className="w-full h-full object-contain" />
+                {overlayBoxes.map(box => {
+                  const c = colorMap[box.color]
+                  return (
+                    <div
+                      key={box.id}
+                      className={`absolute border-2 ${c.border} rounded`}
+                      style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%` }}
+                    >
+                      <span className={`absolute -top-6 left-0 text-xs font-semibold px-2 py-0.5 rounded ${c.bg} ${c.text} whitespace-nowrap`}>{box.label}</span>
+                      <div className={`absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 ${c.border}`} />
+                      <div className={`absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 ${c.border}`} />
+                      <div className={`absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 ${c.border}`} />
+                      <div className={`absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 ${c.border}`} />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {!camOn && !capturedFrame && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <CameraIcon className="w-12 h-12 text-slate-600" />
+                <p className="text-slate-400 text-sm">Camera off — click Start Camera</p>
+                {camError && <p className="text-red-400 text-xs text-center max-w-xs px-4">{camError}</p>}
+              </div>
+            )}
+            {scanning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 gap-3">
+                <div className="w-3/4 h-0.5 bg-cyan-400 animate-pulse" />
+                <span className="text-cyan-300 text-sm font-semibold">Analysing...</span>
+              </div>
+            )}
+            {camOn && !capturedFrame && (
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 rounded-full px-3 py-1">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs text-white font-medium">LIVE</span>
+              </div>
+            )}
+            {capturedFrame && (
+              <button onClick={() => { setScanResult(null); setOverlayBoxes([]); setCapturedFrame(null) }}
+                className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 rounded-full px-3 py-1.5 text-xs text-white">
+                ↺ Scan again
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            {!camOn ? (
+              <button onClick={startCam} className="flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-medium text-sm">
+                <CameraIcon className="w-4 h-4" /> Start Camera
+              </button>
+            ) : (
+              <>
+                <button onClick={doScan} disabled={scanning}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl font-semibold text-sm">
+                  <SparklesIcon className="w-4 h-4" />
+                  {scanning ? 'Analysing...' : 'Scan Document'}
+                </button>
+                <button onClick={stopCam} className="flex items-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm">
+                  <StopIcon className="w-4 h-4" /> Stop Camera
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="p-3 rounded-xl border border-white/5 bg-slate-900/60 text-xs text-slate-400 space-y-1">
+            <p className="font-semibold text-slate-300">How to use</p>
+            <p>1. Click <strong>Start Camera</strong> and allow permission</p>
+            <p>2. Hold an ID, passport, or certificate in front of the camera</p>
+            <p>3. Click <strong>Scan Document</strong> — AI analyses the frame</p>
+            <p>4. AR overlay boxes and results appear instantly</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {scanResult ? (
+            <div className={`rounded-2xl border p-5 ${scanResult.score > 70 ? 'border-emerald-500/40 bg-emerald-500/10' : scanResult.score > 40 ? 'border-amber-500/40 bg-amber-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
+              <p className="text-xs text-slate-400 uppercase tracking-widest mb-1">Verdict</p>
+              <p className={`text-2xl font-bold mb-4 ${scanResult.verdictColor}`}>{scanResult.verdict}</p>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {[
+                  { label: 'Authenticity', val: `${Math.round(scanResult.score)}/100`, color: scanResult.verdictColor },
+                  { label: 'Confidence', val: `${Math.round(scanResult.confidence)}%`, color: 'text-cyan-400' },
+                  { label: 'Risk Score', val: `${scanResult.riskScore}/100`, color: 'text-slate-200' },
+                  { label: 'Risk Level', val: scanResult.riskLevel, color: 'text-slate-200' },
+                ].map(item => (
+                  <div key={item.label} className="rounded-xl bg-black/30 p-3 text-center">
+                    <p className="text-xs text-slate-400 mb-1">{item.label}</p>
+                    <p className={`text-lg font-bold ${item.color}`}>{item.val}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mb-3">
+                <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Score</span><span>{Math.round(scanResult.score)}/100</span></div>
+                <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                  <div className={`h-full rounded-full ${scanResult.score > 70 ? 'bg-emerald-500' : scanResult.score > 40 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${scanResult.score}%` }} />
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/30 p-3">
+                <p className="text-xs text-slate-400 mb-1">Recommendation</p>
+                <p className="text-sm text-slate-200">{scanResult.recommendation}</p>
+              </div>
+              <p className="text-xs text-slate-500 mt-2 text-right">Processed in {scanResult.time.toFixed(2)}s</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 text-center">
+              <DocumentTextIcon className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-400 text-sm">No result yet</p>
+              <p className="text-slate-500 text-xs mt-1">Start camera → Scan Document</p>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4">
+            <p className="text-sm font-semibold text-slate-300 mb-3">Scanner Status</p>
+            {[
+              { label: 'Camera', value: camOn ? 'Active' : 'Offline', ok: camOn },
+              { label: 'AI Engine', value: 'Online', ok: true },
+              { label: 'ELA Detector', value: 'Ready', ok: true },
+              { label: 'Metadata Analyser', value: 'Ready', ok: true },
+            ].map(item => (
+              <div key={item.label} className="flex justify-between text-xs py-1">
+                <span className="text-slate-400">{item.label}</span>
+                <span className={item.ok ? 'text-emerald-400' : 'text-slate-500'}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) {
   const { state, uploadDocument, analyzeDocument } = useForensics()
   const [activeFeature, setActiveFeature] = useState<FeatureMode>('ar')
@@ -628,287 +910,7 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
     }
   }, [cameraStream, isARActive])
 
-  const ARForensics = () => {
-    const [camOn, setCamOn] = useState(false)
-    const [scanning, setScanning] = useState(false)
-    const [scanResult, setScanResult] = useState<any>(null)
-    const [overlayBoxes, setOverlayBoxes] = useState<any[]>([])
-    const [capturedFrame, setCapturedFrame] = useState<string | null>(null)
-    const [camError, setCamError] = useState<string | null>(null)
-    const [scanCount, setScanCount] = useState(0)
-    const liveVideoRef = useRef<HTMLVideoElement>(null)
-    const liveCanvasRef = useRef<HTMLCanvasElement>(null)
-    const liveStreamRef = useRef<MediaStream | null>(null)
 
-    // Attach stream to video element once camera starts
-    useEffect(() => {
-      if (camOn && liveStreamRef.current && liveVideoRef.current) {
-        const video = liveVideoRef.current
-        if (video.srcObject !== liveStreamRef.current) {
-          video.srcObject = liveStreamRef.current
-          video.play().catch(() => {})
-        }
-      }
-    }, [camOn])
-
-    const startCam = async () => {
-      setCamError(null)
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        })
-        liveStreamRef.current = stream
-        if (liveVideoRef.current) {
-          liveVideoRef.current.srcObject = stream
-          await liveVideoRef.current.play()
-        }
-        setCamOn(true)
-        setScanResult(null)
-        setOverlayBoxes([])
-        setCapturedFrame(null)
-      } catch (err: any) {
-        const msg = err.name === 'NotAllowedError'
-          ? 'Camera permission denied. Please allow camera access in browser settings.'
-          : 'Could not access camera.'
-        setCamError(msg)
-        toast.error('Camera access failed')
-      }
-    }
-
-    const stopCam = () => {
-      liveStreamRef.current?.getTracks().forEach(t => t.stop())
-      liveStreamRef.current = null
-      if (liveVideoRef.current) liveVideoRef.current.srcObject = null
-      setCamOn(false)
-      setScanResult(null)
-      setOverlayBoxes([])
-      setCapturedFrame(null)
-    }
-
-    const doScan = async () => {
-      if (!camOn || scanning) return
-      setScanning(true)
-      setScanResult(null)
-      setOverlayBoxes([])
-      try {
-        toast.loading('Capturing frame...', { id: 'livescan' })
-        const video = liveVideoRef.current
-        const canvas = liveCanvasRef.current
-        if (!video || !canvas) throw new Error('No video')
-        canvas.width = video.videoWidth || 1280
-        canvas.height = video.videoHeight || 720
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
-        setCapturedFrame(dataUrl)
-        const blob = await new Promise<Blob>((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('blob fail')), 'image/jpeg', 0.92))
-
-        toast.loading('Analysing document...', { id: 'livescan' })
-        const file = new File([blob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg' })
-        const docId = await uploadDocument(file)
-        const raw = await analyzeDocument(docId) as any
-        const auth = raw?.results?.authenticity || {}
-        const risk = raw?.results?.riskIntelligence || {}
-        const score = auth.score ?? Math.round(Math.random() * 35 + 55)
-
-        const result = {
-          score,
-          confidence: auth.confidence ?? 85,
-          verdict: score > 70 ? 'Authentic' : score > 40 ? 'Suspicious' : 'Tampered',
-          verdictColor: score > 70 ? 'text-emerald-400' : score > 40 ? 'text-amber-400' : 'text-red-400',
-          riskLevel: risk.riskCategory ?? (score > 70 ? 'Low' : score > 40 ? 'Medium' : 'High'),
-          riskScore: risk.personRiskScore ?? Math.round((100 - score) * 0.8),
-          recommendation: score > 70 ? 'Document appears authentic. Proceed.' : score > 40 ? 'Flag for manual review.' : 'Reject — manipulation detected.',
-          evidence: raw?.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
-          time: raw?.processingTime ?? 1.4,
-        }
-        setScanResult(result)
-
-        const boxes = score > 70
-          ? [{ id: 'doc', label: `Authentic ${Math.round(score)}%`, x: 15, y: 10, w: 70, h: 78, color: 'emerald' }]
-          : score > 40
-          ? [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'amber' }, { id: 'w', label: 'Suspicious Region', x: 25, y: 38, w: 40, h: 18, color: 'amber' }]
-          : [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'red' }, { id: 'f', label: 'Manipulation Detected', x: 20, y: 28, w: 50, h: 22, color: 'red' }]
-        setOverlayBoxes(boxes)
-        setScanCount(c => c + 1)
-
-        toast.success(
-          score > 70 ? '✅ Authentic' : score > 40 ? '⚠️ Suspicious' : '🚨 Tampered!',
-          { id: 'livescan', duration: 4000 }
-        )
-      } catch (err) {
-        toast.error('Scan failed. Try again.', { id: 'livescan' })
-      } finally {
-        setScanning(false)
-      }
-    }
-
-    const colorMap: any = {
-      emerald: { border: 'border-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-900/80' },
-      amber:   { border: 'border-amber-400',   text: 'text-amber-300',   bg: 'bg-amber-900/80'   },
-      red:     { border: 'border-red-400',     text: 'text-red-300',     bg: 'bg-red-900/80'     },
-    }
-
-    return (
-      <div className="min-h-[600px] bg-[#0a0f1e] rounded-2xl text-white p-4 md:p-6">
-        <canvas ref={liveCanvasRef} className="hidden" />
-        <div className="mb-5 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
-            <EyeIcon className="w-6 h-6 text-cyan-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">Live Document Scanner</h2>
-            <p className="text-xs text-slate-400">Point camera at a document → click Scan → get AI forensic analysis</p>
-          </div>
-          {scanCount > 0 && <span className="ml-auto text-xs text-slate-500">{scanCount} scan{scanCount !== 1 ? 's' : ''} done</span>}
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <div className="xl:col-span-2 space-y-3">
-            <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900 aspect-video">
-              {/* Always render video so stream never gets killed by unmount */}
-              <video
-                ref={liveVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-contain ${capturedFrame || !camOn ? 'hidden' : 'block'}`}
-              />
-              {capturedFrame && (
-                <div className="relative w-full h-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={capturedFrame} alt="Scan" className="w-full h-full object-contain" />
-                  {overlayBoxes.map(box => {
-                    const c = colorMap[box.color]
-                    return (
-                      <div
-                        key={box.id}
-                        className={`absolute border-2 ${c.border} rounded`}
-                        style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%` }}
-                      >
-                        <span className={`absolute -top-6 left-0 text-xs font-semibold px-2 py-0.5 rounded ${c.bg} ${c.text} whitespace-nowrap`}>{box.label}</span>
-                        <div className={`absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 ${c.border}`} />
-                        <div className={`absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 ${c.border}`} />
-                        <div className={`absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 ${c.border}`} />
-                        <div className={`absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 ${c.border}`} />
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              {!camOn && !capturedFrame && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <CameraIcon className="w-12 h-12 text-slate-600" />
-                  <p className="text-slate-400 text-sm">Camera off — click Start Camera</p>
-                  {camError && <p className="text-red-400 text-xs text-center max-w-xs px-4">{camError}</p>}
-                </div>
-              )}
-              {scanning && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 gap-3">
-                  <div className="w-3/4 h-0.5 bg-cyan-400 animate-pulse" />
-                  <span className="text-cyan-300 text-sm font-semibold">Analysing...</span>
-                </div>
-              )}
-              {camOn && !capturedFrame && (
-                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 rounded-full px-3 py-1">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-xs text-white font-medium">LIVE</span>
-                </div>
-              )}
-              {capturedFrame && (
-                <button onClick={() => { setScanResult(null); setOverlayBoxes([]); setCapturedFrame(null) }}
-                  className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 rounded-full px-3 py-1.5 text-xs text-white">
-                  ↺ Scan again
-                </button>
-              )}
-            </div>
-
-            <div className="flex gap-3 flex-wrap">
-              {!camOn ? (
-                <button onClick={startCam} className="flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-medium text-sm">
-                  <CameraIcon className="w-4 h-4" /> Start Camera
-                </button>
-              ) : (
-                <>
-                  <button onClick={doScan} disabled={scanning}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl font-semibold text-sm">
-                    <SparklesIcon className="w-4 h-4" />
-                    {scanning ? 'Analysing...' : 'Scan Document'}
-                  </button>
-                  <button onClick={stopCam} className="flex items-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm">
-                    <StopIcon className="w-4 h-4" /> Stop Camera
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="p-3 rounded-xl border border-white/5 bg-slate-900/60 text-xs text-slate-400 space-y-1">
-              <p className="font-semibold text-slate-300">How to use</p>
-              <p>1. Click <strong>Start Camera</strong> and allow permission</p>
-              <p>2. Hold an ID, passport, or certificate in front of the camera</p>
-              <p>3. Click <strong>Scan Document</strong> — AI analyses the frame</p>
-              <p>4. AR overlay boxes and results appear instantly</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {scanResult ? (
-              <div className={`rounded-2xl border p-5 ${scanResult.score > 70 ? 'border-emerald-500/40 bg-emerald-500/10' : scanResult.score > 40 ? 'border-amber-500/40 bg-amber-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
-                <p className="text-xs text-slate-400 uppercase tracking-widest mb-1">Verdict</p>
-                <p className={`text-2xl font-bold mb-4 ${scanResult.verdictColor}`}>{scanResult.verdict}</p>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {[
-                    { label: 'Authenticity', val: `${Math.round(scanResult.score)}/100`, color: scanResult.verdictColor },
-                    { label: 'Confidence', val: `${Math.round(scanResult.confidence)}%`, color: 'text-cyan-400' },
-                    { label: 'Risk Score', val: `${scanResult.riskScore}/100`, color: 'text-slate-200' },
-                    { label: 'Risk Level', val: scanResult.riskLevel, color: 'text-slate-200' },
-                  ].map(item => (
-                    <div key={item.label} className="rounded-xl bg-black/30 p-3 text-center">
-                      <p className="text-xs text-slate-400 mb-1">{item.label}</p>
-                      <p className={`text-lg font-bold ${item.color}`}>{item.val}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Score</span><span>{Math.round(scanResult.score)}/100</span></div>
-                  <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
-                    <div className={`h-full rounded-full ${scanResult.score > 70 ? 'bg-emerald-500' : scanResult.score > 40 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${scanResult.score}%` }} />
-                  </div>
-                </div>
-                <div className="rounded-xl bg-black/30 p-3">
-                  <p className="text-xs text-slate-400 mb-1">Recommendation</p>
-                  <p className="text-sm text-slate-200">{scanResult.recommendation}</p>
-                </div>
-                <p className="text-xs text-slate-500 mt-2 text-right">Processed in {scanResult.time.toFixed(2)}s</p>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6 text-center">
-                <DocumentTextIcon className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400 text-sm">No result yet</p>
-                <p className="text-slate-500 text-xs mt-1">Start camera → Scan Document</p>
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4">
-              <p className="text-sm font-semibold text-slate-300 mb-3">Scanner Status</p>
-              {[
-                { label: 'Camera', value: camOn ? 'Active' : 'Offline', ok: camOn },
-                { label: 'AI Engine', value: 'Online', ok: true },
-                { label: 'ELA Detector', value: 'Ready', ok: true },
-                { label: 'Metadata Analyser', value: 'Ready', ok: true },
-              ].map(item => (
-                <div key={item.label} className="flex justify-between text-xs py-1">
-                  <span className="text-slate-400">{item.label}</span>
-                  <span className={item.ok ? 'text-emerald-400' : 'text-slate-500'}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   const BlockchainAnchoring = () => {
     const configuredCount = blockchainConfig?.configuredCount ?? 0
@@ -1310,7 +1312,7 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
   const renderFeature = () => {
     switch (activeFeature) {
       case 'ar':
-        return <ARForensics />
+        return <ARForensicsPanel uploadDocument={uploadDocument} analyzeDocument={analyzeDocument} />
       case 'blockchain':
         return <BlockchainAnchoring />
       case 'ai-assistant':
@@ -1320,7 +1322,7 @@ export function FuturisticFeatures({ activeDocument }: FuturisticFeaturesProps) 
       case 'monitoring':
         return <div className="text-center py-12 text-gray-500">Continuous Monitoring - Coming Soon</div>
       default:
-        return <ARForensics />
+        return <ARForensicsPanel uploadDocument={uploadDocument} analyzeDocument={analyzeDocument} />
     }
   }
 
