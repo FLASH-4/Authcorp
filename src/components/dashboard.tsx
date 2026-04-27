@@ -302,9 +302,15 @@ export function Dashboard({ analysisData }: DashboardProps) {
     : engineHealth === 'degraded'
       ? 'bg-amber-500/90 text-white border border-amber-300/30'
       : 'bg-red-500/90 text-white border border-red-300/30'
-  const deepfakeAlertText = realTimeStats
-    ? `🚨 ${realTimeStats.deepfakesDetected} Deepfakes Detected - ${timeRangeLabel}`
-    : '🚨 Live threat telemetry loading...'
+  const sessionDeepfakeCount = state.documents.filter(d =>
+    d.status === 'blocked' ||
+    d.results?.authenticity?.category === 'ai-generated' ||
+    d.results?.authenticity?.category === 'tampered' ||
+    d.results?.authenticity?.category === 'forged' ||
+    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
+  ).length
+  const totalDeepfakes = sessionDeepfakeCount || realTimeStats?.deepfakesDetected || 0
+  const deepfakeAlertText = `🚨 ${totalDeepfakes} Deepfakes Detected - ${timeRangeLabel}`
   const engineSubtitle = realTimeStats
     ? `Monitoring ${realTimeStats.activeAnalyses} active analyses with ${realTimeStats.accuracyRate.toFixed(1)}% detection accuracy`
     : 'Loading live model telemetry...'
@@ -368,7 +374,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
            <div className="text-center">
              <div className="text-xl sm:text-2xl font-bold text-red-400">
-               {realTimeStats?.deepfakesDetected || 0}
+               {totalDeepfakes}
              </div>
              <div className="text-xs sm:text-sm text-gray-300">Deepfakes Blocked</div>
            </div>

@@ -197,7 +197,11 @@ export function Header() {
   const sessionAnalyzing = forensicsState.documents.filter(d => d.status === 'analyzing').length
   const sessionCompleted = forensicsState.documents.filter(d => d.status === 'completed' || d.status === 'blocked').length
   const sessionDeepfakes = forensicsState.documents.filter(d => 
-    d.status === 'blocked' || (d.results?.authenticity?.category === 'ai-generated')
+    d.status === 'blocked' || 
+    d.results?.authenticity?.category === 'ai-generated' ||
+    d.results?.authenticity?.category === 'tampered' ||
+    d.results?.authenticity?.category === 'forged' ||
+    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
   ).length
   const activeAnalyses = sessionAnalyzing || (liveStats?.activeAnalyses ?? 0)
   const deepfakesDetected = sessionDeepfakes || (liveStats?.deepfakesDetected ?? 0)
