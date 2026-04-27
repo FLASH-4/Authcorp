@@ -162,7 +162,7 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
   }, [currentRiskIntelligence, riskScore])
 
   const sourceCount = useMemo(() => {
-    return new Set(riskFindings.map((finding) => finding.source)).size
+    return new Set((riskFindings || []).filter(Boolean).map((finding) => finding.source || 'Unknown source')).size
   }, [riskFindings])
 
   const timelineEntries = useMemo<TimelineEntry[]>(() => {
@@ -561,7 +561,7 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
         </button>
       </div>
       
-      {riskFindings.map((finding, index) => {
+      {(riskFindings || []).filter(Boolean).map((finding, index) => {
         const SeverityIcon = getSeverityIcon(finding.severity)
         
         return (
@@ -589,25 +589,25 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-2">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      getFindingTypeColor(finding.type)
+                      getFindingTypeColor(finding.type || 'unknown')
                     }`}>
-                      {finding.type.toUpperCase()}
+                      {(finding.type || 'unknown').toUpperCase()}
                     </span>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                       finding.severity === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
                       finding.severity === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
                       'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
                     }`}>
-                      {finding.severity.toUpperCase()}
+                      {(finding.severity || 'low').toUpperCase()}
                     </span>
                   </div>
                   
                   <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-                    {finding.description}
+                    {finding.description || 'No description'}
                   </h4>
                   
                   <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Source: {finding.source}</span>
+                    <span>Source: {finding.source || 'Unknown source'}</span>
                     {finding.date && <span>Date: {new Date(finding.date).toLocaleDateString()}</span>}
                     <span>Confidence: {finding.confidence}%</span>
                   </div>
@@ -802,7 +802,7 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
               const doc = state.documents.find(d => d.id === e.target.value)
               setSelectedDocument(doc || null)
             }}
-            className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-whitefocus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Select Document</option>
             {state.documents.filter(doc => doc.status === 'completed').map(doc => (
