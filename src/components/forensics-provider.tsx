@@ -341,7 +341,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         payload: { id: documentId, updates: { progress: 10 } }
       })
       
-        let classification = await DocumentClassifier.classifyDocument(
+      let classification = await DocumentClassifier.classifyDocument(
         'mock_image_data', // In production, use actual image data
         document.filename,
         'extracted_text' // In production, extract text from document
@@ -398,22 +398,23 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         }
       }
 
-      // INTELLIGENT ANALYSIS with document-specific detection
-      const aiDetectionResult = await AIDetectionEngine.detectAIGeneration(
-        'mock_image_data',
-        {
-          documentType: classification.type,
-          contextAware: true,
-          enableBiometric: classification.type !== 'presentation',
-          realTimeAlerts: isHighRiskDocument(classification.type)
-        }
-      )
-      
-      // INTELLIGENT RESULTS based on document type and context
+      // Use vision result to determine threat level — no random AI detection
       const isHighRisk = isHighRiskDocument(classification.type)
-      // Only block if BOTH AI detection AND vision analysis agree it's problematic
-      const visionSaysAuthentic = visionResult && visionResult.authenticityScore > 60
-      const shouldBlock = aiDetectionResult.isAIGenerated && isHighRisk && aiDetectionResult.confidence > 0.8 && !visionSaysAuthentic
+      const visionScore = visionResult?.authenticityScore ?? 75
+      const visionCategory = visionResult?.category ?? 'authentic'
+      
+      // Block only if vision explicitly says AI-generated or very low score on high-risk doc
+      const shouldBlock = visionResult
+        ? (visionCategory === 'ai-generated' && isHighRisk) || (visionScore < 25 && isHighRisk)
+        : false  // never block without vision confirmation
+
+      // Create a compatible aiDetectionResult shape for downstream code
+      const aiDetectionResult = {
+        isAIGenerated: visionCategory === 'ai-generated',
+        confidence: (visionResult?.confidence ?? 70) / 100,
+        type: visionCategory,
+        indicators: visionResult?.reasoning || []
+      }
       
       // Use real vision score if available, otherwise fall back to mock
       const authScore = visionResult
