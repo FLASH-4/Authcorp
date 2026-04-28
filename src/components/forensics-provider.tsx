@@ -341,7 +341,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         payload: { id: documentId, updates: { progress: 10 } }
       })
       
-      const classification = await DocumentClassifier.classifyDocument(
+        let classification = await DocumentClassifier.classifyDocument(
         'mock_image_data', // In production, use actual image data
         document.filename,
         'extracted_text' // In production, extract text from document
@@ -379,6 +379,22 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           }
         } catch (e) {
           console.warn('Vision analysis failed, using fallback:', e)
+        }
+      }
+
+      // Override document classification with vision result if available
+      if (visionResult?.extractedText) {
+        const text = visionResult.extractedText.toLowerCase()
+        if (text.includes('resume') || text.includes('curriculum vitae') || text.includes('work experience')) {
+          classification = { ...classification, type: 'unknown' as any, confidence: 0.9 }
+        } else if (text.includes('passport') && text.includes('republic')) {
+          classification = { ...classification, type: 'passport' as any, confidence: 0.9 }
+        } else if (text.includes('aadhaar') || text.includes('aadhar')) {
+          classification = { ...classification, type: 'aadhar_card' as any, confidence: 0.95 }
+        } else if (text.includes('pan') && text.includes('income tax')) {
+          classification = { ...classification, type: 'pan_card' as any, confidence: 0.9 }
+        } else if (text.includes('driving') || text.includes('licence')) {
+          classification = { ...classification, type: 'driving_license' as any, confidence: 0.85 }
         }
       }
 
@@ -474,15 +490,17 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           }
         },
         heatmap: {
-          suspiciousRegions: (visionResult?.heatmapRegions?.length > 0) ? visionResult.heatmapRegions : isManipulated
+          // Only show vision-detected regions OR mock regions for manipulated docs
+          // Never show mock regions for authentic/clean docs
+          suspiciousRegions: visionResult
+            ? (visionResult.heatmapRegions || [])  // trust vision result completely
+            : isManipulated
             ? [
                 { x: 80, y: 120, width: 240, height: 80, confidence: 0.82, type: 'text_modification' },
                 { x: 200, y: 300, width: 160, height: 60, confidence: 0.71, type: 'copy_move' },
                 { x: 50, y: 400, width: 300, height: 50, confidence: 0.65, type: 'compression_anomaly' }
               ]
-            : isSuspicious
-            ? [{ x: 100, y: 150, width: 180, height: 70, confidence: 0.55, type: 'minor_inconsistency' }]
-            : []
+            : [] // authentic = no regions shown
         },
         riskIntelligence: {
           personRiskScore: isManipulated ? 65 + Math.random() * 30 : 5 + Math.random() * 20,

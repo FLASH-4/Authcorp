@@ -201,7 +201,7 @@ export function Header() {
     d.results?.authenticity?.category === 'ai-generated' ||
     d.results?.authenticity?.category === 'tampered' ||
     d.results?.authenticity?.category === 'forged' ||
-    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
+    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 60)
   ).length
   const activeAnalyses = sessionAnalyzing || (liveStats?.activeAnalyses ?? 0)
   const deepfakesDetected = sessionDeepfakes || (liveStats?.deepfakesDetected ?? 0)

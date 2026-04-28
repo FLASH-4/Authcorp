@@ -303,21 +303,34 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
   }, [])
 
   const personProfile = useMemo<PersonProfile>(() => {
-    if ((data as any)?.profile) {
-      return (data as any).profile
-    }
+    if ((data as any)?.profile) return (data as any).profile
 
-    const documentName = selectedDocument?.filename ? toTitleCase(selectedDocument.filename) : 'No Document Selected'
-    const documentType = selectedDocument?.classification?.type ? toTitleCase(selectedDocument.classification.type) : selectedDocument?.fileType || 'Unknown'
+    const results = selectedDocument?.results
+    const auth = results?.authenticity
+    const extractedText = results?.forensics?.textAnalysis?.extractedText || ''
+    const docType = selectedDocument?.classification?.type
+    const filename = selectedDocument?.filename || 'No Document Selected'
+
+    // Determine document subject name from extracted text or filename
+    // Don't use filename as person's name — that's wrong
+    const subjectName = extractedText.match(/name[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/i)?.[1] || 'Not extracted from document'
+    const dobMatch = extractedText.match(/(?:dob|date of birth|born)[:\s]+([0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})/i)
+    const emailMatch = extractedText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)
+    const phoneMatch = extractedText.match(/[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}/g)
 
     return {
-      name: documentName,
-      dateOfBirth: selectedDocument?.uploadedAt ? new Date(selectedDocument.uploadedAt).toLocaleString() : undefined,
-      nationality: documentType,
-      identificationNumbers: selectedDocument ? [`Document ID: ${selectedDocument.id}`] : [],
-      addresses: selectedDocument?.classification?.riskFactors?.length ? selectedDocument.classification.riskFactors : [selectedDocument ? 'No address data extracted' : 'No document selected'],
-      phoneNumbers: [selectedDocument ? `Status: ${selectedDocument.status}` : 'Status: unavailable'],
-      emailAddresses: selectedDocument?.results?.authenticity ? [`Authenticity: ${selectedDocument.results.authenticity.category}`] : ['No authenticity result yet'],
+      name: subjectName,
+      dateOfBirth: dobMatch ? dobMatch[1] : undefined,
+      nationality: docType ? toTitleCase(docType.replace(/_/g, ' ')) : 'Unknown',
+      identificationNumbers: [
+        `File: ${filename}`,
+        auth ? `Authenticity: ${Math.round(auth.score || 0)}% (${auth.category || 'unknown'})` : 'Not analysed',
+      ],
+      addresses: ['Address data not available — enable OCR microservice for extraction'],
+      phoneNumbers: phoneMatch?.slice(0, 2) || ['Not detected in document'],
+      emailAddresses: emailMatch?.slice(0, 2) || [
+        auth ? `Document classified as: ${auth.category || 'unknown'}` : 'No authentication result'
+      ],
     }
   }, [data, selectedDocument])
 
