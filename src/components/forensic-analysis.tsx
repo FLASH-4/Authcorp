@@ -165,7 +165,9 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
               <div>
                 <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Identified Type</h4>
                 <p className="text-blue-700 dark:text-blue-300 text-lg font-semibold">
-                  {documentClassification.type.toUpperCase().replace('_', ' ')}
+                  {documentClassification.type === 'photo'
+                    ? 'PHOTO / NOT A DOCUMENT'
+                    : documentClassification.type.toUpperCase().replace(/_/g, ' ')}
                 </p>
                 <p className="text-blue-600 dark:text-blue-400 text-sm">
                   Confidence: {(documentClassification.confidence * 100).toFixed(1)}%
@@ -174,8 +176,12 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
               <div>
                 <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Verification Status</h4>
                 <p className="text-blue-700 dark:text-blue-300">
-                  {results?.authenticity.category === 'authentic' ? '✅ Verified Authentic' : 
+                  {documentClassification.type === 'photo' ? 'ℹ️ Plain Photo — Not a Security Document' :
+                   results?.authenticity.category === 'authentic' ? '✅ Verified Authentic' : 
                    results?.authenticity.category === 'ai-generated' && documentClassification.type === 'presentation' ? 'ℹ️ AI Content (Normal for Presentations)' :
+                   results?.authenticity.category === 'ai-generated' ? '🚨 AI-Generated Content Detected' :
+                   results?.authenticity.category === 'tampered' ? '⚠️ Tampering Detected' :
+                   results?.authenticity.category === 'forged' ? '🚨 Forgery Detected' :
                    '⚠️ Requires Review'}
                 </p>
               </div>

@@ -196,6 +196,15 @@ export function Header() {
   // Use session documents to populate live stats
   const sessionAnalyzing = forensicsState.documents.filter(d => d.status === 'analyzing').length
   const sessionCompleted = forensicsState.documents.filter(d => d.status === 'completed' || d.status === 'blocked').length
+  const [extraDeepfakes, setExtraDeepfakes] = useState(0)
+
+  // Listen for deepfake-detected events so the header counter updates immediately
+  useEffect(() => {
+    const handler = () => setExtraDeepfakes(prev => prev + 1)
+    window.addEventListener('deepfake-detected', handler)
+    return () => window.removeEventListener('deepfake-detected', handler)
+  }, [])
+
   const sessionDeepfakes = useMemo(() =>
     forensicsState.documents.filter(d => 
       d.status === 'blocked' || 
@@ -206,7 +215,7 @@ export function Header() {
     ).length
   , [forensicsState.documents])
   const activeAnalyses = sessionAnalyzing + (liveStats?.activeAnalyses ?? 0)
-  const deepfakesDetected = sessionDeepfakes + (liveStats?.deepfakesDetected ?? 0)
+  const deepfakesDetected = Math.max(sessionDeepfakes, extraDeepfakes) + (liveStats?.deepfakesDetected ?? 0)
   const activePanelTitle = activePanel === 'profile' ? 'Profile Settings' : 'System Preferences'
   const activePanelDescription = activePanel === 'profile'
     ? 'Review the current signed-in account details and copy the account email.'

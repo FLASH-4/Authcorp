@@ -22,6 +22,7 @@ export type DocumentType =
   | 'invoice'
   | 'contract'
   | 'medical_report'
+  | 'photo'
   | 'unknown'
 
 export interface VerificationRule {
@@ -266,6 +267,7 @@ export class DocumentClassifier {
       invoice: ['Financial fraud', 'Tax evasion', 'Amount manipulation'],
       contract: ['Legal fraud', 'Terms manipulation', 'Signature forgery'],
       medical_report: ['Insurance fraud', 'Diagnosis manipulation', 'Doctor impersonation'],
+      photo: ['Photo manipulation', 'Deepfake risk', 'Impersonation'],
       unknown: ['Unknown document risks']
     }
     

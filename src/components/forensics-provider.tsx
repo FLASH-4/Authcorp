@@ -426,14 +426,21 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           'resume': 'unknown',
           'certificate': 'unknown',
           'bank_document': 'unknown',
-          'photo': 'unknown',
-          'not-a-document': 'unknown',
+          'photo': 'photo',
+          'not-a-document': 'photo',
+          'not_a_document': 'photo',
         }
         const mappedType = typeMap[vType] || 'unknown'
         classification = { 
           ...classification, 
           type: mappedType as any, 
-          confidence: (visionResult.confidence || 70) / 100 
+          confidence: (visionResult.confidence || 70) / 100,
+          // Photos are not security documents - clear any high-risk expected fields
+          ...(mappedType === 'photo' ? {
+            expectedFields: [],
+            verificationRules: [],
+            riskFactors: ['Not a document — plain photograph or selfie'],
+          } : {})
         }
       }
 
@@ -441,10 +448,12 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const isHighRisk = isHighRiskDocument(classification.type)
       const visionScore = visionResult?.authenticityScore ?? 75
       const visionCategory = visionResult?.category ?? 'authentic'
+      const isPhoto = classification.type === 'photo' || visionResult?.documentType === 'photo' || visionResult?.documentType === 'not-a-document' || visionResult?.documentType === 'not_a_document'
       
       // Only block based on vision result - never block without vision confirmation
-      // This prevents random mock AI engine from falsely triggering security alerts
+      // Never block plain photos — they are not identity documents
       const shouldBlock = visionResult !== null &&
+        !isPhoto &&
         visionCategory === 'ai-generated' &&
         isHighRisk &&
         visionScore < 30
@@ -579,6 +588,30 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             } 
           }
         })
+
+        // Fire deepfake-detected event so header + dashboard counters update
+        window.dispatchEvent(new CustomEvent('deepfake-detected', {
+          detail: {
+            documentId,
+            filename: document.filename,
+            category: mockResults.authenticity?.category,
+            score: mockResults.authenticity?.score,
+            type: classification.type,
+          }
+        }))
+
+        // Fire analysis-completed so dashboard activity feed updates
+        window.dispatchEvent(new CustomEvent('analysis-completed', {
+          detail: {
+            document: {
+              ...document,
+              results: mockResults,
+              status: 'blocked',
+              classification,
+            },
+            results: mockResults,
+          }
+        }))
         
         toast.error(`🚨 ${classification.type.toUpperCase()} BLOCKED - AI content detected in critical document`)
         console.warn(`Document blocked: ${classification.type} with AI confidence ${(aiDetectionResult.confidence * 100).toFixed(1)}%`)
@@ -595,6 +628,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         visionUsed: Boolean(visionResult),
         visionSource: visionResult?.source
       })
+
       dispatch({
         type: 'UPDATE_DOCUMENT',
         payload: { 
@@ -606,25 +640,39 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           } 
         }
       })
-      return { results: mockResults, status: 'completed' }
 
-      // Emit analysis completed event for dashboard updates
-      const updatedDocument = state.documents.find(doc => doc.id === documentId)
-      if (updatedDocument) {
-        window.dispatchEvent(new CustomEvent('analysis-completed', { 
-          detail: { 
-            document: { ...updatedDocument, results: mockResults, status: 'completed', classification }, 
-            results: mockResults 
-          } 
+      // Emit analysis-completed event for dashboard activity feed
+      window.dispatchEvent(new CustomEvent('analysis-completed', { 
+        detail: { 
+          document: { ...document, results: mockResults, status: 'completed', classification }, 
+          results: mockResults 
+        } 
+      }))
+
+      // If the vision result flagged this as deepfake/tampered/forged, fire deepfake event too
+      const isFlaggedThreat = ['ai-generated', 'tampered', 'forged'].includes(mockResults.authenticity?.category)
+      if (isFlaggedThreat) {
+        window.dispatchEvent(new CustomEvent('deepfake-detected', {
+          detail: {
+            documentId,
+            filename: document.filename,
+            category: mockResults.authenticity?.category,
+            score: mockResults.authenticity?.score,
+            type: classification.type,
+          }
         }))
       }
 
       // Context-aware success message
       if (classification.type === 'presentation') {
         toast.success(`✅ ${classification.type.toUpperCase()} verified - Content appears authentic for presentation context`)
+      } else if (isFlaggedThreat) {
+        toast.error(`🚨 ${classification.type.toUpperCase()} flagged - ${mockResults.authenticity?.category} content detected`)
       } else {
         toast.success(`✅ ${classification.type.toUpperCase()} analysis completed - Document appears authentic`)
       }
+
+      return { results: mockResults, status: 'completed' }
     } catch (error) {
       console.error('Analysis failed for document:', documentId, error)
       
