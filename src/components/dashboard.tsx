@@ -129,7 +129,8 @@ export function Dashboard({ analysisData }: DashboardProps) {
         return [...sessionActivity, ...dbActivity].slice(0, 10)
       })
     }
-  }, [state.documents])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.documents.length, state.documents.map(d => d.status).join(',')])
 
   // Load real-time data
   useEffect(() => {
@@ -380,7 +381,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
            </div>
            <div className="text-center">
              <div className="text-xl sm:text-2xl font-bold text-orange-400">
-               {realTimeStats?.faceSwapsDetected || 0}
+               {state.documents.filter(d => d.results?.authenticity?.category === 'ai-generated').length || realTimeStats?.faceSwapsDetected || 0}
              </div>
              <div className="text-xs sm:text-sm text-gray-300">Face Swaps</div>
            </div>

@@ -368,14 +368,45 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         try {
           const base64 = storedPreview.split(',')[1]
           const mimeType = storedPreview.split(';')[0].split(':')[1]
+          // Check size - Vercel limit is 4.5MB for request body
+          const base64SizeKB = (base64.length * 3) / 4 / 1024
+          let finalBase64 = base64
+          
+          // If image too large, resize via canvas
+          if (base64SizeKB > 1500 && typeof window !== 'undefined') {
+            try {
+              const img = new window.Image()
+              await new Promise<void>((res, rej) => {
+                img.onload = () => res()
+                img.onerror = rej
+                img.src = storedPreview
+              })
+              const canvas = window.document.createElement('canvas')
+              const scale = Math.min(1, Math.sqrt(1500 * 1024 / (img.width * img.height * 3)))
+              canvas.width = Math.floor(img.width * scale)
+              canvas.height = Math.floor(img.height * scale)
+              const ctx = canvas.getContext('2d')!
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+              const resized = canvas.toDataURL('image/jpeg', 0.85)
+              finalBase64 = resized.split(',')[1]
+            } catch (resizeErr) {
+              console.warn('Resize failed, using original:', resizeErr)
+            }
+          }
+
           const visionResponse = await fetch('/api/documents/vision-analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ imageBase64: base64, mimeType })
+            body: JSON.stringify({ imageBase64: finalBase64, mimeType })
           })
+          
           if (visionResponse.ok) {
             visionResult = await visionResponse.json()
+            console.log('Vision result:', visionResult?.source, 'score:', visionResult?.authenticityScore, 'type:', visionResult?.documentType)
+          } else {
+            const errText = await visionResponse.text()
+            console.error('Vision API failed:', visionResponse.status, errText.slice(0, 200))
           }
         } catch (e) {
           console.warn('Vision analysis failed, using fallback:', e)
