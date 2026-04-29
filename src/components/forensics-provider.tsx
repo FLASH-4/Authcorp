@@ -382,19 +382,27 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         }
       }
 
-      // Override document classification with vision result if available
-      if (visionResult?.extractedText) {
-        const text = visionResult.extractedText.toLowerCase()
-        if (text.includes('resume') || text.includes('curriculum vitae') || text.includes('work experience')) {
-          classification = { ...classification, type: 'unknown' as any, confidence: 0.9 }
-        } else if (text.includes('passport') && text.includes('republic')) {
-          classification = { ...classification, type: 'passport' as any, confidence: 0.9 }
-        } else if (text.includes('aadhaar') || text.includes('aadhar')) {
-          classification = { ...classification, type: 'aadhar_card' as any, confidence: 0.95 }
-        } else if (text.includes('pan') && text.includes('income tax')) {
-          classification = { ...classification, type: 'pan_card' as any, confidence: 0.9 }
-        } else if (text.includes('driving') || text.includes('licence')) {
-          classification = { ...classification, type: 'driving_license' as any, confidence: 0.85 }
+      // Override document classification with vision's documentType (most accurate)
+      if (visionResult?.documentType && visionResult.documentType !== 'unknown') {
+        const vType = visionResult.documentType
+        const typeMap: Record<string, string> = {
+          'aadhaar_card': 'aadhar_card',
+          'aadhar_card': 'aadhar_card',
+          'pan_card': 'pan_card',
+          'passport': 'passport',
+          'driving_license': 'driving_license',
+          'driving_licence': 'driving_license',
+          'resume': 'unknown',
+          'certificate': 'unknown',
+          'bank_document': 'unknown',
+          'photo': 'unknown',
+          'not-a-document': 'unknown',
+        }
+        const mappedType = typeMap[vType] || 'unknown'
+        classification = { 
+          ...classification, 
+          type: mappedType as any, 
+          confidence: (visionResult.confidence || 70) / 100 
         }
       }
 
