@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   ChartBarIcon,
@@ -310,7 +310,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
     d.results?.authenticity?.category === 'forged' ||
     (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
   ).length
-  const totalDeepfakes = sessionDeepfakeCount || realTimeStats?.deepfakesDetected || 0
+  const totalDeepfakes = sessionDeepfakeCount + (realTimeStats?.deepfakesDetected ?? 0)
   const deepfakeAlertText = `🚨 ${totalDeepfakes} Deepfakes Detected - ${timeRangeLabel}`
   const engineSubtitle = realTimeStats
     ? `Monitoring ${realTimeStats.activeAnalyses} active analyses with ${realTimeStats.accuracyRate.toFixed(1)}% detection accuracy`

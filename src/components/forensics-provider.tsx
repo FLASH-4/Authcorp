@@ -442,10 +442,12 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const visionScore = visionResult?.authenticityScore ?? 75
       const visionCategory = visionResult?.category ?? 'authentic'
       
-      // Block only if vision explicitly says AI-generated or very low score on high-risk doc
-      const shouldBlock = visionResult
-        ? (visionCategory === 'ai-generated' && isHighRisk) || (visionScore < 25 && isHighRisk)
-        : false  // never block without vision confirmation
+      // Only block based on vision result - never block without vision confirmation
+      // This prevents random mock AI engine from falsely triggering security alerts
+      const shouldBlock = visionResult !== null &&
+        visionCategory === 'ai-generated' &&
+        isHighRisk &&
+        visionScore < 30
 
       // Create a compatible aiDetectionResult shape for downstream code
       const aiDetectionResult = {

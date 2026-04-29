@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -196,13 +196,15 @@ export function Header() {
   // Use session documents to populate live stats
   const sessionAnalyzing = forensicsState.documents.filter(d => d.status === 'analyzing').length
   const sessionCompleted = forensicsState.documents.filter(d => d.status === 'completed' || d.status === 'blocked').length
-  const sessionDeepfakes = forensicsState.documents.filter(d => 
-    d.status === 'blocked' || 
-    d.results?.authenticity?.category === 'ai-generated' ||
-    d.results?.authenticity?.category === 'tampered' ||
-    d.results?.authenticity?.category === 'forged' ||
-    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 60)
-  ).length
+  const sessionDeepfakes = useMemo(() =>
+    forensicsState.documents.filter(d => 
+      d.status === 'blocked' || 
+      d.results?.authenticity?.category === 'ai-generated' ||
+      d.results?.authenticity?.category === 'tampered' ||
+      d.results?.authenticity?.category === 'forged' ||
+      (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 60)
+    ).length
+  , [forensicsState.documents])
   const activeAnalyses = sessionAnalyzing + (liveStats?.activeAnalyses ?? 0)
   const deepfakesDetected = sessionDeepfakes + (liveStats?.deepfakesDetected ?? 0)
   const activePanelTitle = activePanel === 'profile' ? 'Profile Settings' : 'System Preferences'
