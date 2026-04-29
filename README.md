@@ -1,390 +1,230 @@
-# 🛡️ AuthCorp Platform
+# AuthCorp — AI-Powered Document Verification Platform
 
-**Next-Generation AI-Powered Document Verification & Risk Intelligence Platform**
+<div align="center">
 
-AuthCorp is an enterprise-grade platform that combines advanced AI detection, document forensics, and risk intelligence to provide unmatched document authenticity verification and fraud prevention capabilities.
+![AuthCorp](https://img.shields.io/badge/AuthCorp-AI%20Document%20Verification-blue?style=for-the-badge)
+![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-green?style=for-the-badge&logo=openai)
+![Vercel](https://img.shields.io/badge/Deployed-Vercel-black?style=for-the-badge&logo=vercel)
 
-## 🚀 Features
+**Live Demo:** [authcorp.vercel.app](https://authcorp.vercel.app)
 
-### 🤖 Advanced AI Detection
-- **Deepfake Detection**: 98.5% accuracy in detecting AI-generated faces and synthetic content
-- **GAN Detection**: Identifies StyleGAN, DCGAN, and diffusion model artifacts
-- **Document Forgery**: Advanced tampering and manipulation detection
-- **Real-time Analysis**: Instant results with comprehensive confidence scoring
-
-### 🔍 Forensic Analysis
-- **Image Forensics**: Error Level Analysis, noise detection, compression artifacts
-- **Metadata Analysis**: EXIF data examination and tampering clues
-- **OCR & Text Verification**: Font analysis, signature verification, alignment checks
-- **Cross-document Consistency**: Identity verification across multiple documents
-
-### 🌐 Risk Intelligence
-- **Background Checks**: Criminal records, sanctions, fraud databases
-- **Real-time Monitoring**: Continuous threat detection and alerts
-- **Compliance**: GDPR, CCPA, HIPAA compliant with audit trails
-- **Blockchain Anchoring**: Immutable verification records
-
-### 📱 Mobile-First Design
-- **Responsive Interface**: Optimized for mobile investigators
-- **Touch-friendly Controls**: Perfect for field operations
-- **Offline Capabilities**: Core features work without internet
-- **Progressive Web App**: Install on any device
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend API   │    │   Database      │
-│   (Next.js)     │◄──►│   (Node.js)     │◄──►│   (PostgreSQL)  │
-│                 │    │                 │    │                 │
-│ • React 18      │    │ • REST API      │    │ • Documents     │
-│ • TypeScript    │    │ • Authentication│    │ • Users         │
-│ • Tailwind CSS  │    │ • File Upload   │    │ • Analyses      │
-│ • Framer Motion │    │ • AI Processing │    │ • Audit Logs    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐              │
-         │              │   AI Services   │              │
-         │              │                 │              │
-         └──────────────┤ • Deepfake Det. │──────────────┘
-                        │ • OCR Engine    │
-                        │ • Risk Intel    │
-                        │ • Blockchain    │
-                        └─────────────────┘
-```
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Node.js** 18+ and npm 8+
-- **Database**: PostgreSQL 13+ (or MySQL 8+, MongoDB 5+)
-- **Redis** 6+ (for caching and sessions)
-- **Docker** (optional, for containerized deployment)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-org/authcorp-platform.git
-cd authcorp-platform
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Environment setup**
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your configuration
-   ```
-
-4. **Database setup**
-   ```bash
-   # PostgreSQL
-   createdb authcorp
-   npm run db:migrate
-   npm run db:seed
-   ```
-
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-6. **Open your browser**
-   ```
-   http://localhost:3000
-   ```
-
-## 🗄️ Database Setup
-
-### PostgreSQL (Recommended)
-
-```sql
--- Create database
-CREATE DATABASE authcorp;
-CREATE USER authcorp_user WITH PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE authcorp TO authcorp_user;
-
--- Connect to authcorp database
-\c authcorp;
-
--- Enable required extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-```
-
-### Environment Variables
-
-```env
-# Database
-DB_TYPE=postgresql
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=authcorp
-DB_USER=authcorp_user
-DB_PASSWORD=your_secure_password
-DATABASE_URL=postgresql://authcorp_user:your_secure_password@localhost:5432/authcorp
-
-# Security
-JWT_SECRET=your_jwt_secret_key_here
-ENCRYPTION_KEY=your_32_character_encryption_key
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_oauth_client_id_here
-
-# External APIs
-OPENAI_API_KEY=your_openai_api_key
-RISK_INTEL_API_KEY=your_risk_intelligence_key
-ALERT_WEBHOOK_URL=your_alert_webhook_url
-```
-
-## 🚀 Production Deployment
-
-### Docker Deployment
-
-1. **Build the image**
-   ```bash
-   docker build -t authcorp-platform .
-   ```
-
-2. **Run with Docker Compose**
-   ```bash
-   docker-compose up -d
-   ```
-
-### Manual Deployment
-
-1. **Build for production**
-   ```bash
-   npm run build
-   ```
-
-2. **Start production server**
-   ```bash
-   npm start
-   ```
-
-### Cloud Deployment
-
-#### AWS
-```bash
-# Using AWS Amplify
-npm install -g @aws-amplify/cli
-amplify init
-amplify add hosting
-amplify publish
-```
-
-#### Vercel
-```bash
-npm install -g vercel
-vercel --prod
-```
-
-#### Google Cloud
-```bash
-gcloud app deploy
-```
-
-## 🔧 Configuration
-
-### Database Providers
-
-The platform supports multiple database providers:
-
-- **PostgreSQL** (Recommended for production)
-- **MySQL** (Good performance, wide compatibility)
-- **MongoDB** (NoSQL, flexible schema)
-- **SQLite** (Development only)
-
-### AI Model Configuration
-
-```env
-# AI Detection Thresholds
-DEEPFAKE_DETECTION_THRESHOLD=0.7
-FORGERY_DETECTION_THRESHOLD=0.8
-AI_CONFIDENCE_THRESHOLD=0.85
-
-# Model Endpoints
-AI_MODEL_ENDPOINT=http://localhost:8000
-OCR_SERVICE_URL=http://localhost:8001
-RISK_INTEL_URL=http://localhost:8002
-```
-
-### Security Configuration
-
-```env
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000  # 15 minutes
-RATE_LIMIT_MAX_REQUESTS=100
-
-# File Upload
-MAX_FILE_SIZE=52428800  # 50MB
-ALLOWED_FILE_TYPES=image/jpeg,image/png,image/tiff,application/pdf
-
-# Session Security
-SESSION_TIMEOUT=3600000  # 1 hour
-MAX_LOGIN_ATTEMPTS=5
-LOCKOUT_DURATION=900000  # 15 minutes
-```
-
-## 📊 Monitoring & Analytics
-
-### Health Checks
-
-- **Application**: `GET /api/health`
-- **Database**: `GET /api/health/database`
-- **AI Services**: `GET /api/health/ai`
-- **External APIs**: `GET /api/health/external`
-
-### Metrics
-
-- **Documents Processed**: Real-time counter
-- **Detection Accuracy**: Continuously calculated
-- **Response Times**: P95, P99 percentiles
-- **Error Rates**: By endpoint and service
-
-### Logging
-
-```javascript
-// Structured logging with Winston
-logger.info('Document analysis completed', {
-  documentId: 'doc_123',
-  userId: 'user_456',
-  processingTime: 2.3,
-  result: 'authentic',
-  confidence: 0.95
-})
-```
-
-## 🔐 Security
-
-### Authentication
-
-- **JWT Tokens**: Secure, stateless authentication
-- **Role-based Access**: Admin, Investigator, Analyst, Viewer
-- **Multi-factor Authentication**: TOTP support
-- **Session Management**: Automatic timeout and refresh
-
-### Data Protection
-
-- **Encryption at Rest**: AES-256 for sensitive data
-- **Encryption in Transit**: TLS 1.3 for all communications
-- **Data Minimization**: GDPR-compliant data handling
-- **Audit Logging**: Comprehensive activity tracking
-
-### Compliance
-
-- **GDPR**: Right to be forgotten, data portability
-- **CCPA**: California Consumer Privacy Act compliance
-- **HIPAA**: Healthcare data protection (optional)
-- **SOC 2**: Security controls and monitoring
-
-## 🧪 Testing
-
-### Unit Tests
-```bash
-npm run test
-npm run test:coverage
-```
-
-### Integration Tests
-```bash
-npm run test:integration
-```
-
-### E2E Tests
-```bash
-npm run test:e2e
-```
-
-### Performance Tests
-```bash
-npm run test:performance
-```
-
-## 📚 API Documentation
-
-### Authentication
-```bash
-POST /api/auth/login
-POST /api/auth/logout
-POST /api/auth/refresh
-GET  /api/auth/me
-```
-
-### Document Analysis
-```bash
-POST /api/documents/analyze
-GET  /api/documents/:id
-GET  /api/documents/:id/results
-DELETE /api/documents/:id
-```
-
-### Risk Intelligence
-```bash
-POST /api/risk/check
-GET  /api/risk/:id
-GET  /api/risk/history
-```
-
-### Analytics
-```bash
-GET  /api/analytics/stats
-GET  /api/analytics/trends
-GET  /api/analytics/reports
-```
-
-## 🤝 Contributing
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit your changes**: `git commit -m 'Add amazing feature'`
-4. **Push to the branch**: `git push origin feature/amazing-feature`
-5. **Open a Pull Request**
-
-### Development Guidelines
-
-- **Code Style**: ESLint + Prettier configuration
-- **Commit Messages**: Conventional Commits format
-- **Testing**: Minimum 80% code coverage
-- **Documentation**: Update README and API docs
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Documentation**: [docs.authcorp.com](https://docs.authcorp.com)
-- **Issues**: [GitHub Issues](https://github.com/your-org/authcorp-platform/issues)
-- **Discord**: [Community Chat](https://discord.gg/authcorp)
-- **Email**: support@authcorp.com
-
-## 🗺️ Roadmap
-
-### Q1 2024
-- [ ] Advanced video deepfake detection
-- [ ] Multi-language OCR support
-- [ ] Mobile SDK for iOS/Android
-- [ ] Advanced blockchain integration
-
-### Q2 2024
-- [ ] Machine learning model training interface
-- [ ] Advanced threat simulation sandbox
-- [ ] Enterprise SSO integration
-- [ ] Advanced analytics dashboard
-
-### Q3 2024
-- [ ] Real-time collaboration features
-- [ ] Advanced AR forensics tools
-- [ ] Automated report generation
-- [ ] Advanced API rate limiting
+</div>
 
 ---
 
-**Built with ❤️ by the AuthCorp Team**
+## What is AuthCorp?
 
-*Securing digital trust through advanced AI and forensic technology.*
+AuthCorp is a next-generation forensic document verification platform that uses AI vision, blockchain anchoring, and multi-detector forensic analysis to detect forged, tampered, and AI-generated documents in real time.
+
+Built as a Final Year B.Tech Project.
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔍 **AI Forensic Analysis** | GPT-4o-mini Vision analyses every uploaded document — returns authenticity score, heatmap regions, metadata clues |
+| 📸 **Live AR Document Scanner** | WebRTC camera feed + live frame capture + instant AI analysis with AR overlay boxes |
+| 🔗 **Blockchain Anchoring** | Anchors document SHA-256 hash to Ethereum/Polygon via Infura — creates tamper-evident timestamp proof |
+| 🗺️ **Tampering Heatmap** | Visual grid showing suspicious regions color-coded by type (text modification, copy-move, compression anomaly) |
+| 📋 **Metadata Forensics** | EXIF data extraction, editing software detection, font inconsistency analysis |
+| 🤖 **AI Forensic Assistant** | OpenAI GPT-3.5-turbo powered chat with full document context awareness |
+| 🛡️ **Risk Intelligence** | Sanctions screening, fraud pattern detection, risk scoring with evidence trail |
+| 📊 **Real-time Dashboard** | Live deepfake counter, authenticity rate, recent activity feed |
+| 🔐 **Secure Auth** | JWT sessions + Google OAuth 2.0 |
+| 🚨 **Threat Simulation** | Test the system with simulated attack scenarios |
+
+---
+
+## Tech Stack
+
+```
+Frontend:    Next.js 14 · React 18 · TypeScript · Tailwind CSS · Framer Motion
+AI:          OpenAI GPT-4o-mini Vision · GPT-3.5-turbo
+Blockchain:  Ethereum + Polygon via Infura JSON-RPC
+Auth:        JWT · Google OAuth 2.0
+Database:    PostgreSQL (Neon) · Redis (Upstash)
+Deployment:  Vercel (serverless)
+Camera:      WebRTC · HTML5 Canvas API
+```
+
+---
+
+## Quick Start
+
+### 1. Clone and install
+```bash
+git clone https://github.com/YOUR_USERNAME/authcorp.git
+cd authcorp
+npm install
+```
+
+### 2. Set up environment variables
+```bash
+cp .env.local .env.local.bak
+```
+
+Edit `.env.local` with your API keys:
+
+```env
+# Security (generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
+JWT_SECRET=your_64_char_secret
+ENCRYPTION_KEY=your_32_char_key
+SESSION_SECRET=your_random_secret
+
+# Google OAuth — console.cloud.google.com
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+
+# OpenAI — platform.openai.com (free $5 credit)
+OPENAI_API_KEY=sk-your_key
+
+# Infura/MetaMask — developer.metamask.io (free tier)
+ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID
+POLYGON_RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
+
+# Database — neon.tech (free tier)
+DATABASE_URL=postgresql://user:pass@host/authcorp?sslmode=require
+
+# Redis — upstash.com (free tier)
+REDIS_URL=rediss://default:password@host.upstash.io:6379
+
+# Feature flags
+ENABLE_BLOCKCHAIN_ANCHORING=true
+ENABLE_AI_ASSISTANT=true
+ENABLE_REAL_TIME_MONITORING=true
+NODE_ENV=development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
+```
+
+### 3. Run
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+**Demo credentials:** `admin@authcorp.com` / `admin123`
+
+---
+
+## Free API Keys Setup
+
+| Service | URL | Free Tier |
+|---------|-----|-----------|
+| OpenAI | [platform.openai.com](https://platform.openai.com) | $5 free credit |
+| Google OAuth | [console.cloud.google.com](https://console.cloud.google.com) | Free forever |
+| Infura (Blockchain) | [developer.metamask.io](https://developer.metamask.io) | 3M requests/month |
+| Neon (PostgreSQL) | [neon.tech](https://neon.tech) | 512MB free |
+| Upstash (Redis) | [upstash.com](https://upstash.com) | 500k commands/month |
+
+---
+
+## Project Structure
+
+```
+authcorp/
+├── src/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── assistant/ask/      # AI assistant (OpenAI GPT-3.5)
+│   │   │   ├── auth/               # Login, logout, Google OAuth
+│   │   │   ├── blockchain/         # Blockchain anchoring (Infura)
+│   │   │   └── documents/
+│   │   │       ├── analyze/        # Document analysis pipeline
+│   │   │       └── vision-analyze/ # GPT-4o-mini Vision API
+│   │   ├── ar-forensics/           # Live document scanner page
+│   │   ├── login/                  # Auth page
+│   │   └── page.tsx                # Main dashboard
+│   ├── components/
+│   │   ├── forensics-provider.tsx  # Global analysis state
+│   │   ├── forensic-analysis.tsx   # Forensic tabs (Overview/Heatmap/Metadata/Text)
+│   │   ├── risk-intelligence.tsx   # Risk screening
+│   │   ├── dashboard.tsx           # Main dashboard
+│   │   ├── document-upload.tsx     # Upload interface
+│   │   ├── futuristic-features.tsx # AR Scanner, Blockchain, AI Assistant
+│   │   └── header.tsx              # Live stats header
+│   └── lib/
+│       ├── blockchain-config.ts    # Network definitions
+│       ├── document-classifier.ts  # Document type detection
+│       ├── security.ts             # JWT, encryption, audit logging
+│       └── ai-detection.ts         # AI detection engine
+├── services/                       # Python microservices (Docker)
+│   ├── detectors/ela/              # Error Level Analysis
+│   ├── detectors/metadata/         # EXIF metadata analysis
+│   ├── detectors/quantization/     # DCT quantization analysis
+│   ├── fusion/                     # Multi-detector result fusion
+│   ├── ingest/                     # File ingestion service
+│   ├── ocr/                        # Tesseract OCR
+│   └── risk/                       # Risk intelligence service
+├── sql/init.sql                    # PostgreSQL schema
+├── docker-compose.yml              # Full stack Docker setup
+└── vercel.json                     # Vercel deployment config
+```
+
+---
+
+## How Document Analysis Works
+
+```
+User uploads document
+        ↓
+FileReader converts to base64
+        ↓
+GPT-4o-mini Vision API analyses image
+        ↓
+Returns: authenticity score, document type,
+         heatmap regions, metadata clues,
+         extracted text, reasoning
+        ↓
+Results displayed across 5 tabs:
+Overview · Heatmap · Metadata · Text Analysis · Comparison
+        ↓
+If score < 60% → Deepfake counter increments
+If blocked → Security alert shown
+        ↓
+Optional: Anchor SHA-256 hash to blockchain
+```
+
+---
+
+## Blockchain Anchoring
+
+AuthCorp uses a **witness-based anchoring** approach:
+
+1. SHA-256 hash of document computed client-side
+2. `eth_blockNumber` called on Infura to get latest block
+3. `eth_getBlockByNumber` fetches block hash and timestamp
+4. Deterministic anchor ID created: `SHA256(network:docHash:blockHash)`
+5. Block number verifiable on [Etherscan](https://etherscan.io) / [Polygonscan](https://polygonscan.com)
+
+This proves the document existed and was verified at a specific point in time without storing any personal data on-chain.
+
+---
+
+## Deployment
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/authcorp)
+
+Add all environment variables in Vercel → Project → Settings → Environment Variables, then deploy.
+
+---
+
+## Demo Credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@authcorp.com | admin123 |
+| Investigator | investigator@authcorp.com | investigator123 |
+| Analyst | analyst@authcorp.com | analyst123 |
+
+Or use **Continue with Google** (after Google OAuth setup).
+
+---
+
+## License
+
+MIT License — Built for educational purposes as a B.Tech Final Year Project.

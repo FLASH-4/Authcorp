@@ -203,8 +203,8 @@ export function Header() {
     d.results?.authenticity?.category === 'forged' ||
     (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 60)
   ).length
-  const activeAnalyses = sessionAnalyzing || (liveStats?.activeAnalyses ?? 0)
-  const deepfakesDetected = sessionDeepfakes || (liveStats?.deepfakesDetected ?? 0)
+  const activeAnalyses = sessionAnalyzing + (liveStats?.activeAnalyses ?? 0)
+  const deepfakesDetected = sessionDeepfakes + (liveStats?.deepfakesDetected ?? 0)
   const activePanelTitle = activePanel === 'profile' ? 'Profile Settings' : 'System Preferences'
   const activePanelDescription = activePanel === 'profile'
     ? 'Review the current signed-in account details and copy the account email.'
