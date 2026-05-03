@@ -25,8 +25,8 @@ type AnalysisMode = 'overview' | 'heatmap' | 'metadata' | 'text' | 'comparison'
 export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const { state } = useForensics()
   const [activeMode, setActiveMode] = useState<AnalysisMode>('overview')
-  const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
   const [selectedDocId, setSelectedDocId] = useState<string>('')
+  const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
   
   // Auto-select newest completed doc when list changes
   useEffect(() => {
