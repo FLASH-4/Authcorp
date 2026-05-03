@@ -398,7 +398,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ imageBase64: finalBase64, mimeType })
+            body: JSON.stringify({ imageBase64: finalBase64, mimeType, filename: document.filename })
           })
           
           if (visionResponse.ok) {
