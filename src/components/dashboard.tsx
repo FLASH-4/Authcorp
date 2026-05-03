@@ -303,13 +303,15 @@ export function Dashboard({ analysisData }: DashboardProps) {
     : engineHealth === 'degraded'
       ? 'bg-amber-500/90 text-white border border-amber-300/30'
       : 'bg-red-500/90 text-white border border-red-300/30'
-  const sessionDeepfakeCount = state.documents.filter(d =>
+  const sessionDeepfakeCount = useMemo(() =>
+    state.documents.filter(d =>
     d.status === 'blocked' ||
     d.results?.authenticity?.category === 'ai-generated' ||
     d.results?.authenticity?.category === 'tampered' ||
     d.results?.authenticity?.category === 'forged' ||
     (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
   ).length
+  , [state.documents])
   const totalDeepfakes = sessionDeepfakeCount + (realTimeStats?.deepfakesDetected ?? 0)
   const deepfakeAlertText = `🚨 ${totalDeepfakes} Deepfakes Detected - ${timeRangeLabel}`
   const engineSubtitle = realTimeStats
