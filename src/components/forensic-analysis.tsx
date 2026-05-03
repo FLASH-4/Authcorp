@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   EyeIcon,
@@ -26,6 +26,9 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const { state } = useForensics()
   const [activeMode, setActiveMode] = useState<AnalysisMode>('overview')
   const [selectedDocId, setSelectedDocId] = useState<string>('')
+  const [previewNaturalSize, setPreviewNaturalSize] = useState<{ width: number; height: number } | null>(null)
+  const [imagePlane, setImagePlane] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const heatmapContainerRef = useRef<HTMLDivElement | null>(null)
 
   // All computed values - defined before any useEffect
   const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
@@ -268,11 +271,104 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
     )
   }
 
+  const heatmapResults = (analysisResults || selectedDocument?.results)?.heatmap
+  const heatmapRegions = heatmapResults?.suspiciousRegions || []
+  const heatmapPreviewSrc = selectedDocument?.previewUrl
+
+  const heatmapRegionBounds = useMemo(() => {
+    const bounds = heatmapRegions.reduce(
+      (acc: { maxRight: number; maxBottom: number }, region: any) => {
+        const right = Number(region?.x || 0) + Number(region?.width || 0)
+        const bottom = Number(region?.y || 0) + Number(region?.height || 0)
+        return {
+          maxRight: Math.max(acc.maxRight, right),
+          maxBottom: Math.max(acc.maxBottom, bottom),
+        }
+      },
+      { maxRight: 0, maxBottom: 0 }
+    )
+
+    return {
+      width: Math.max(bounds.maxRight, 400),
+      height: Math.max(bounds.maxBottom, 560),
+    }
+  }, [heatmapRegions])
+
+  const toNormalizedHeatmapRegion = (region: any) => {
+    const x = Number(region?.x || 0)
+    const y = Number(region?.y || 0)
+    const width = Number(region?.width || 0)
+    const height = Number(region?.height || 0)
+
+    if (x <= 1 && y <= 1 && width <= 1 && height <= 1) {
+      return { x, y, width, height }
+    }
+
+    if (x <= 100 && y <= 100 && width <= 100 && height <= 100) {
+      return {
+        x: x / 100,
+        y: y / 100,
+        width: width / 100,
+        height: height / 100,
+      }
+    }
+
+    return {
+      x: x / heatmapRegionBounds.width,
+      y: y / heatmapRegionBounds.height,
+      width: width / heatmapRegionBounds.width,
+      height: height / heatmapRegionBounds.height,
+    }
+  }
+
+  useEffect(() => {
+    setPreviewNaturalSize(null)
+    setImagePlane(null)
+  }, [heatmapPreviewSrc])
+
+  useEffect(() => {
+    const updateImagePlane = () => {
+      const container = heatmapContainerRef.current
+      if (!container) {
+        return
+      }
+
+      const containerWidth = container.clientWidth
+      const containerHeight = container.clientHeight
+      if (containerWidth <= 0 || containerHeight <= 0) {
+        return
+      }
+
+      if (!previewNaturalSize) {
+        setImagePlane({ x: 0, y: 0, width: containerWidth, height: containerHeight })
+        return
+      }
+
+      const scale = Math.min(
+        containerWidth / previewNaturalSize.width,
+        containerHeight / previewNaturalSize.height
+      )
+
+      const width = previewNaturalSize.width * scale
+      const height = previewNaturalSize.height * scale
+
+      setImagePlane({
+        x: (containerWidth - width) / 2,
+        y: (containerHeight - height) / 2,
+        width,
+        height,
+      })
+    }
+
+    updateImagePlane()
+    window.addEventListener('resize', updateImagePlane)
+    return () => window.removeEventListener('resize', updateImagePlane)
+  }, [previewNaturalSize, heatmapPreviewSrc, heatmapRegions.length])
+
   const renderHeatmap = () => {
-    const results = analysisResults || selectedDocument?.results
-    const heatmap = results?.heatmap
-    const regions = heatmap?.suspiciousRegions || []
-    const previewSrc = selectedDocument?.previewUrl
+    const heatmap = heatmapResults
+    const regions = heatmapRegions
+    const previewSrc = heatmapPreviewSrc
 
     if (!heatmap && regions.length === 0) {
       return (
@@ -297,7 +393,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
           className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
         >
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tampering Heatmap</h3>
-          <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ height: '420px' }}>
+          <div ref={heatmapContainerRef} className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ height: '420px' }}>
             {/* Document preview so the heatmap is tied to the selected file. */}
             {previewSrc ? (
               <>
@@ -305,9 +401,30 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
                 <img
                   src={previewSrc}
                   alt="Selected document preview"
-                  className="absolute inset-0 h-full w-full object-contain"
+                  className="absolute"
+                  style={{
+                    left: `${imagePlane?.x || 0}px`,
+                    top: `${imagePlane?.y || 0}px`,
+                    width: `${imagePlane?.width || 0}px`,
+                    height: `${imagePlane?.height || 0}px`,
+                    objectFit: 'contain',
+                  }}
+                  onLoad={(event) => {
+                    const target = event.currentTarget
+                    if (target.naturalWidth && target.naturalHeight) {
+                      setPreviewNaturalSize({ width: target.naturalWidth, height: target.naturalHeight })
+                    }
+                  }}
                 />
-                <div className="absolute inset-0 bg-slate-950/45" />
+                <div
+                  className="absolute bg-slate-950/45"
+                  style={{
+                    left: `${imagePlane?.x || 0}px`,
+                    top: `${imagePlane?.y || 0}px`,
+                    width: `${imagePlane?.width || 0}px`,
+                    height: `${imagePlane?.height || 0}px`,
+                  }}
+                />
               </>
             ) : (
               <div className="absolute inset-0 bg-slate-900/70" />
@@ -328,19 +445,25 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
             ) : (
               <>
                 {regions.map((region: any, idx: number) => (
+                  (() => {
+                    const normalized = toNormalizedHeatmapRegion(region)
+                    const plane = imagePlane || { x: 0, y: 0, width: 0, height: 0 }
+                    return (
                   <div key={idx}
                     className={`absolute border-2 rounded ${colorMap[region.type] || 'bg-red-500/50 border-red-400'}`}
                     style={{
-                      left: `${(region.x / 400) * 100}%`,
-                      top: `${(region.y / 560) * 100}%`,
-                      width: `${(region.width / 400) * 100}%`,
-                      height: `${(region.height / 560) * 100}%`,
+                      left: `${plane.x + normalized.x * plane.width}px`,
+                      top: `${plane.y + normalized.y * plane.height}px`,
+                      width: `${normalized.width * plane.width}px`,
+                      height: `${normalized.height * plane.height}px`,
                     }}
                   >
                     <span className="absolute -top-6 left-0 text-xs text-white bg-black/70 px-1.5 py-0.5 rounded whitespace-nowrap">
                       {(region.type || 'anomaly').replace(/_/g, ' ')} — {Math.round(region.confidence * 100)}%
                     </span>
                   </div>
+                    )
+                  })()
                 ))}
                 <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-black/60 px-2 py-1 rounded">
                   {regions.length} suspicious region{regions.length !== 1 ? 's' : ''} flagged
