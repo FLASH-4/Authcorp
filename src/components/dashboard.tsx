@@ -268,6 +268,16 @@ export function Dashboard({ analysisData }: DashboardProps) {
     },
   ] : []
 
+  const sessionDeepfakeCount = useMemo(() =>
+    state.documents.filter(d =>
+    d.status === 'blocked' ||
+    d.results?.authenticity?.category === 'ai-generated' ||
+    d.results?.authenticity?.category === 'tampered' ||
+    d.results?.authenticity?.category === 'forged' ||
+    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
+  ).length
+  , [state.documents])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -276,7 +286,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
       </div>
     )
   }
-  
+
   const getResultColor = (result: string) => {
     switch (result) {
       case 'authentic': return 'text-green-600 bg-green-100 dark:bg-green-900/20'
@@ -303,15 +313,6 @@ export function Dashboard({ analysisData }: DashboardProps) {
     : engineHealth === 'degraded'
       ? 'bg-amber-500/90 text-white border border-amber-300/30'
       : 'bg-red-500/90 text-white border border-red-300/30'
-  const sessionDeepfakeCount = useMemo(() =>
-    state.documents.filter(d =>
-    d.status === 'blocked' ||
-    d.results?.authenticity?.category === 'ai-generated' ||
-    d.results?.authenticity?.category === 'tampered' ||
-    d.results?.authenticity?.category === 'forged' ||
-    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
-  ).length
-  , [state.documents])
   const totalDeepfakes = sessionDeepfakeCount + (realTimeStats?.deepfakesDetected ?? 0)
   const deepfakeAlertText = `🚨 ${totalDeepfakes} Deepfakes Detected - ${timeRangeLabel}`
   const engineSubtitle = realTimeStats
