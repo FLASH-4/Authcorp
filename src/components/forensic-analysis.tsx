@@ -272,6 +272,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
     const results = analysisResults || selectedDocument?.results
     const heatmap = results?.heatmap
     const regions = heatmap?.suspiciousRegions || []
+    const previewSrc = selectedDocument?.previewUrl
 
     if (!heatmap && regions.length === 0) {
       return (
@@ -297,7 +298,22 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
         >
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tampering Heatmap</h3>
           <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ height: '420px' }}>
-            {/* Background grid */}
+            {/* Document preview so the heatmap is tied to the selected file. */}
+            {previewSrc ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewSrc}
+                  alt="Selected document preview"
+                  className="absolute inset-0 h-full w-full object-contain"
+                />
+                <div className="absolute inset-0 bg-slate-950/45" />
+              </>
+            ) : (
+              <div className="absolute inset-0 bg-slate-900/70" />
+            )}
+
+            {/* Forensic coordinate grid */}
             <div className="absolute inset-0 opacity-20"
               style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '40px 40px' }}
             />
@@ -328,6 +344,9 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
                 ))}
                 <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-black/60 px-2 py-1 rounded">
                   {regions.length} suspicious region{regions.length !== 1 ? 's' : ''} flagged
+                </div>
+                <div className="absolute bottom-3 left-3 text-xs text-gray-400 bg-black/60 px-2 py-1 rounded">
+                  Heatmap aligned to selected document
                 </div>
               </>
             )}

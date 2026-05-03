@@ -478,10 +478,44 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         ['ai-generated', 'tampered', 'forged'].includes(normalizedVisionCategory) &&
         (!Array.isArray(visionResult.heatmapRegions) || visionResult.heatmapRegions.length === 0)
       )
-      const fallbackHeatmapRegions = [
-        { x: 240, y: 100, width: 120, height: 120, confidence: 0.81, type: 'text_modification' },
-        { x: 220, y: 420, width: 130, height: 70, confidence: 0.76, type: 'color_mismatch' },
-      ]
+      const createSeededRandom = (seedInput: string) => {
+        let seed = 0
+        for (let i = 0; i < seedInput.length; i += 1) {
+          seed = (seed * 31 + seedInput.charCodeAt(i)) % 2147483647
+        }
+        if (seed <= 0) {
+          seed = 1234567
+        }
+
+        return () => {
+          seed = (seed * 48271) % 2147483647
+          return (seed - 1) / 2147483646
+        }
+      }
+
+      const buildDynamicHeatmapRegions = (count: number) => {
+        const rand = createSeededRandom(`${document.id}:${document.filename}:${classification.type}:${authScore.toFixed(2)}`)
+        const regionTypes = ['text_modification', 'copy_move', 'compression_anomaly', 'color_mismatch', 'font_inconsistency']
+
+        return Array.from({ length: count }).map((_, index) => {
+          const width = Math.round(70 + rand() * 120)
+          const height = Math.round(45 + rand() * 110)
+          const maxX = Math.max(5, 400 - width - 5)
+          const maxY = Math.max(5, 560 - height - 5)
+
+          return {
+            x: Math.round(5 + rand() * maxX),
+            y: Math.round(5 + rand() * maxY),
+            width,
+            height,
+            confidence: Number((0.62 + rand() * 0.32).toFixed(2)),
+            type: regionTypes[(index + Math.floor(rand() * regionTypes.length)) % regionTypes.length],
+          }
+        })
+      }
+
+      const fallbackHeatmapRegions = buildDynamicHeatmapRegions(2)
+      const simulatedManipulationRegions = isManipulated ? buildDynamicHeatmapRegions(3) : []
 
       const mockResults: any = {
         authenticity: {
@@ -556,11 +590,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           suspiciousRegions: visionResult
             ? (requiresHeatmapFallback ? fallbackHeatmapRegions : (visionResult.heatmapRegions || []))
             : isManipulated
-            ? [
-                { x: 80, y: 120, width: 240, height: 80, confidence: 0.82, type: 'text_modification' },
-                { x: 200, y: 300, width: 160, height: 60, confidence: 0.71, type: 'copy_move' },
-                { x: 50, y: 400, width: 300, height: 50, confidence: 0.65, type: 'compression_anomaly' }
-              ]
+            ? simulatedManipulationRegions
             : [] // authentic = no regions shown
         },
         riskIntelligence: {
