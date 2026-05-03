@@ -43,11 +43,22 @@ Check these specific things:
 - For resume/CV: These are NOT security documents — they should score high (75-90%) unless they contain forged credentials
 
 STEP 3 — MARK SUSPICIOUS REGIONS:
-For each suspicious area, provide coordinates as PERCENTAGE of image dimensions (0-100 scale).
-- x: 0-100 (0=left edge, 100=right edge of image)
-- y: 0-100 (0=top edge, 100=bottom edge of image)
-- width: 0-100 (percentage of image width)
-- height: 0-100 (percentage of image height)
+For EACH visible area of concern, mark a rectangle around it with coordinates as PERCENTAGES (0-100).
+Be SPECIFIC and mark ACTUAL suspicious areas you can see:
+- If the photo looks pasted/different: mark the photo area
+- If text looks edited: mark the text
+- If colors don't match: mark the mismatched area  
+- If fonts are inconsistent: mark those words/sections
+- If security features are missing or damaged: mark those areas
+
+Guidelines:
+- x: 0-100 (0=left, 100=right edge)
+- y: 0-100 (0=top, 100=bottom edge)
+- width: How much of image width the region spans (in percentage, e.g., 15 = 15% of width)
+- height: How much of image height the region spans (in percentage)
+- Examples: 
+  - Photo in upper-left covering 30% width, 40% height: x=5, y=5, width=30, height=40
+  - Modified text in center: x=20, y=50, width=60, height=15
 
 Respond ONLY with this exact JSON (no markdown, no explanation):
 {
@@ -127,6 +138,33 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       const clean = text.replace(/```json\n?|\n?```/g, '').trim()
       const parsed = JSON.parse(clean)
 
+      // Ensure all heatmap regions are in 0-100 percentage format
+      const normalizedRegions = (Array.isArray(parsed.heatmapRegions) ? parsed.heatmapRegions : [])
+        .slice(0, 6)
+        .map((region: any) => {
+          const x = Number(region?.x || 0)
+          const y = Number(region?.y || 0)
+          const w = Number(region?.width || 0)
+          const h = Number(region?.height || 0)
+
+          // If coordinates are in pixel format (large numbers), assume they're relative to ~800x600 image
+          // Convert to 0-100 percentage if they appear to be pixels
+          const isPixelFormat = x > 100 || y > 100 || w > 100 || h > 100
+          const normX = isPixelFormat ? (x / 800) * 100 : Math.min(100, Math.max(0, x))
+          const normY = isPixelFormat ? (y / 600) * 100 : Math.min(100, Math.max(0, y))
+          const normW = isPixelFormat ? (w / 800) * 100 : Math.min(100, Math.max(0, w))
+          const normH = isPixelFormat ? (h / 600) * 100 : Math.min(100, Math.max(0, h))
+
+          return {
+            x: Number(normX.toFixed(1)),
+            y: Number(normY.toFixed(1)),
+            width: Number(normW.toFixed(1)),
+            height: Number(normH.toFixed(1)),
+            confidence: Math.min(1, Math.max(0.5, Number(region?.confidence) || 0.75)),
+            type: region?.type || 'anomaly'
+          }
+        })
+
       return NextResponse.json({
         documentType: parsed.documentType || 'unknown',
         authenticityScore: Math.min(100, Math.max(0, Number(parsed.authenticityScore) || 72)),
@@ -134,7 +172,7 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         category: parsed.category || 'authentic',
         isManipulated: Boolean(parsed.isManipulated),
         reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning : ['Analysis completed'],
-        heatmapRegions: Array.isArray(parsed.heatmapRegions) ? parsed.heatmapRegions.slice(0, 6) : [],
+        heatmapRegions: normalizedRegions,
         metadata: {
           editingSoftware: parsed.metadata?.editingSoftware || null,
           tamperingClues: parsed.metadata?.tamperingClues || [],

@@ -300,24 +300,14 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
     const width = Number(region?.width || 0)
     const height = Number(region?.height || 0)
 
-    if (x <= 1 && y <= 1 && width <= 1 && height <= 1) {
-      return { x, y, width, height }
-    }
-
-    if (x <= 100 && y <= 100 && width <= 100 && height <= 100) {
-      return {
-        x: x / 100,
-        y: y / 100,
-        width: width / 100,
-        height: height / 100,
-      }
-    }
-
+    // All regions should be in 0-100 percentage format from backend
+    // Convert to 0-1 normalized format for rendering
+    // Clamp to ensure values are in valid range
     return {
-      x: x / heatmapRegionBounds.width,
-      y: y / heatmapRegionBounds.height,
-      width: width / heatmapRegionBounds.width,
-      height: height / heatmapRegionBounds.height,
+      x: Math.max(0, Math.min(1, x > 1 ? x / 100 : x)),
+      y: Math.max(0, Math.min(1, y > 1 ? y / 100 : y)),
+      width: Math.max(0, Math.min(1, width > 1 ? width / 100 : width)),
+      height: Math.max(0, Math.min(1, height > 1 ? height / 100 : height)),
     }
   }
 
