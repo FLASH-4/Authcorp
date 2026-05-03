@@ -130,7 +130,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.documents.length, state.documents.map(d => d.status).join(',')])
+  }, [state.documents.length])
 
   // Load real-time data
   useEffect(() => {
