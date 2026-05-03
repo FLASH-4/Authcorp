@@ -11,6 +11,7 @@ interface DocumentAnalysis {
   filename: string
   fileType: string
   fileSize: number
+  contentFingerprint?: string
   uploadedAt: Date
   status: 'uploading' | 'analyzing' | 'completed' | 'failed' | 'blocked'
   progress: number
@@ -237,6 +238,15 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
   const documentRegistry = useRef<Record<string, DocumentAnalysis>>({})
   const [isHydrated, setIsHydrated] = useState(false)
 
+  const createContentFingerprint = (input: string): string => {
+    let hash = 2166136261
+    for (let index = 0; index < input.length; index += 1) {
+      hash ^= input.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
+    return (hash >>> 0).toString(36)
+  }
+
   useEffect(() => {
     // Restore saved documents before syncing the shared data service, otherwise a blank mount can overwrite them.
     const storedDocuments = loadStoredDocuments()
@@ -268,11 +278,24 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           reader.onerror = reject
           reader.readAsDataURL(file)
         })
+        const contentFingerprint = createContentFingerprint(dataUrl)
         if (file.type.startsWith('image/')) {
           previewUrl = dataUrl
         }
         // Store for vision analysis (both images and PDFs)
         previewUrlMap.current[documentId] = dataUrl
+        documentRegistry.current[documentId] = {
+          ...(documentRegistry.current[documentId] || {}),
+          id: documentId,
+          filename: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          contentFingerprint,
+          uploadedAt: new Date(),
+          status: 'uploading',
+          progress: 0,
+          previewUrl,
+        }
       } catch {
         previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
       }
@@ -283,6 +306,9 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       filename: file.name,
       fileType: file.type,
       fileSize: file.size,
+      contentFingerprint: previewUrlMap.current[documentId]
+        ? createContentFingerprint(previewUrlMap.current[documentId])
+        : createContentFingerprint(`${file.name}:${file.size}:${file.type}`),
       uploadedAt: new Date(),
       status: 'uploading',
       progress: 0,
@@ -368,6 +394,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         try {
           const base64 = storedPreview.split(',')[1]
           const mimeType = storedPreview.split(';')[0].split(':')[1]
+          const imageFingerprint = createContentFingerprint(storedPreview)
           // Check size - Vercel limit is 4.5MB for request body
           const base64SizeKB = (base64.length * 3) / 4 / 1024
           let finalBase64 = base64
@@ -398,7 +425,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ imageBase64: finalBase64, mimeType, filename: document.filename })
+            body: JSON.stringify({ imageBase64: finalBase64, mimeType, filename: document.filename, imageFingerprint })
           })
           
           if (visionResponse.ok) {
@@ -444,6 +471,21 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         }
       }
 
+      const sameTypeReference = [...state.documents]
+        .filter((doc) =>
+          doc.id !== documentId &&
+          (doc.status === 'completed' || doc.status === 'blocked') &&
+          doc.classification?.type === classification.type &&
+          Boolean(doc.contentFingerprint)
+        )
+        .slice(-1)[0] || null
+
+      const contentMismatchComparedToReference = Boolean(
+        sameTypeReference?.contentFingerprint &&
+        document.contentFingerprint &&
+        sameTypeReference.contentFingerprint !== document.contentFingerprint
+      )
+
       // Use vision result to determine threat level — no random AI detection
       const isHighRisk = isHighRiskDocument(classification.type)
       const visionScore = visionResult?.authenticityScore ?? 75
@@ -472,6 +514,11 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         : calculateContextualScore(aiDetectionResult, classification)
       const isManipulated = visionResult ? visionResult.isManipulated : authScore < 60
       const isSuspicious = authScore < 80
+      const sessionComparisonSuspect = contentMismatchComparedToReference && isHighRisk
+      const adjustedAuthScore = sessionComparisonSuspect ? Math.min(authScore, 35) : authScore
+      const adjustedCategory = sessionComparisonSuspect
+        ? 'tampered'
+        : (visionResult ? visionResult.category : determineCategory(aiDetectionResult, classification))
       const normalizedVisionCategory = String(visionResult?.category || '').toLowerCase()
       const requiresHeatmapFallback = Boolean(
         visionResult &&
@@ -494,7 +541,9 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       }
 
       const buildDynamicHeatmapRegions = (count: number) => {
-        const rand = createSeededRandom(`${document.id}:${document.filename}:${classification.type}:${authScore.toFixed(2)}`)
+        const rand = createSeededRandom(
+          `${document.id}:${document.filename}:${classification.type}:${authScore.toFixed(2)}:${document.contentFingerprint || 'no-fingerprint'}:${sameTypeReference?.contentFingerprint || 'no-reference'}`
+        )
         const regionTypes = ['text_modification', 'copy_move', 'compression_anomaly', 'color_mismatch', 'font_inconsistency']
 
         return Array.from({ length: count }).map((_, index) => {
@@ -515,21 +564,26 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       }
 
       const fallbackHeatmapRegions = buildDynamicHeatmapRegions(2)
-      const simulatedManipulationRegions = isManipulated ? buildDynamicHeatmapRegions(3) : []
+      const simulatedManipulationRegions = (isManipulated || sessionComparisonSuspect) ? buildDynamicHeatmapRegions(3) : []
 
       const mockResults: any = {
         authenticity: {
-          score: authScore,
+          score: adjustedAuthScore,
           confidence: visionResult ? visionResult.confidence : aiDetectionResult.confidence * 100,
-          category: visionResult ? visionResult.category : determineCategory(aiDetectionResult, classification),
-          reasoning: visionResult ? visionResult.reasoning : generateContextualReasoning(aiDetectionResult, classification)
+          category: adjustedCategory,
+          reasoning: sessionComparisonSuspect
+            ? [
+                ...(visionResult?.reasoning || generateContextualReasoning(aiDetectionResult, classification)),
+                'Session comparison detected a content fingerprint change against the prior same-type document.',
+              ]
+            : (visionResult ? visionResult.reasoning : generateContextualReasoning(aiDetectionResult, classification))
         },
         forensics: {
           imageForensics: {
             errorLevelAnalysis: isManipulated ? 72 + Math.random() * 20 : 8 + Math.random() * 15,
             noiseAnalysis: isManipulated ? 65 + Math.random() * 25 : 5 + Math.random() * 12,
             compressionArtifacts: isManipulated,
-            copyMoveDetection: authScore < 50
+            copyMoveDetection: adjustedAuthScore < 50
           },
           metadataAnalysis: {
             exifData: visionResult?.metadata ? {
@@ -561,26 +615,32 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
               ? visionResult.metadata.tamperingClues
               : isManipulated
               ? ['Editing software detected in metadata', 'Timestamp inconsistency found', 'GPS data stripped after creation']
+              : sessionComparisonSuspect
+              ? ['Content fingerprint changed compared with the prior same-type document in this session']
               : isSuspicious
               ? ['Minor metadata inconsistency detected']
               : []
           },
           textAnalysis: {
             extractedText: visionResult?.extractedText
-              ? `${visionResult.extractedText}\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\nAuthenticity Score: ${authScore.toFixed(1)}%`
-              : `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${authScore.toFixed(1)}%`,
+              ? `${visionResult.extractedText}\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\nAuthenticity Score: ${adjustedAuthScore.toFixed(1)}%`
+              : `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated || sessionComparisonSuspect ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${adjustedAuthScore.toFixed(1)}%`,
             confidence: aiDetectionResult.confidence * 100,
-            fontConsistency: isManipulated ? 45 + Math.random() * 20 : 85 + Math.random() * 12,
-            alignmentScore: isManipulated ? 55 : 92,
+            fontConsistency: (isManipulated || sessionComparisonSuspect) ? 45 + Math.random() * 20 : 85 + Math.random() * 12,
+            alignmentScore: (isManipulated || sessionComparisonSuspect) ? 55 : 92,
             alignmentIssues: isManipulated
               ? ['Baseline shift detected in paragraph 2', 'Character spacing inconsistency in header']
+              : sessionComparisonSuspect
+              ? ['Session comparison detected different content fingerprint from the prior same-type Aadhaar upload']
               : [],
             anomalies: isManipulated
               ? ['Mixed font families detected', 'Pixel-level text inconsistency']
+              : sessionComparisonSuspect
+              ? ['Edited image region detected when compared to prior same-type upload']
               : [],
             signatureVerification: {
-              isValid: !isManipulated,
-              confidence: isManipulated ? 35 : 91
+              isValid: !(isManipulated || sessionComparisonSuspect),
+              confidence: (isManipulated || sessionComparisonSuspect) ? 35 : 91
             }
           }
         },
@@ -588,18 +648,18 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           // Only show vision-detected regions OR mock regions for manipulated docs
           // Never show mock regions for authentic/clean docs
           suspiciousRegions: visionResult
-            ? (requiresHeatmapFallback ? fallbackHeatmapRegions : (visionResult.heatmapRegions || []))
-            : isManipulated
+            ? (requiresHeatmapFallback ? (visionResult.heatmapRegions?.length ? visionResult.heatmapRegions : fallbackHeatmapRegions) : (visionResult.heatmapRegions || []))
+            : (isManipulated || sessionComparisonSuspect)
             ? simulatedManipulationRegions
             : [] // authentic = no regions shown
         },
         riskIntelligence: {
-          personRiskScore: isManipulated ? 65 + Math.random() * 30 : 5 + Math.random() * 20,
-          riskCategory: isManipulated ? 'high' : isSuspicious ? 'medium' : 'low',
+          personRiskScore: (isManipulated || sessionComparisonSuspect) ? 65 + Math.random() * 30 : 5 + Math.random() * 20,
+          riskCategory: (isManipulated || sessionComparisonSuspect) ? 'high' : isSuspicious ? 'medium' : 'low',
           findings: ([
             {
               type: 'background_check',
-              description: isManipulated ? 'Document anomalies suggest potential fraud' : 'No adverse findings in background check',
+              description: (isManipulated || sessionComparisonSuspect) ? 'Document anomalies suggest potential fraud' : 'No adverse findings in background check',
               confidence: 90,
               source: 'AuthCorp Forensics Engine'
             },

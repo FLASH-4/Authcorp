@@ -32,7 +32,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
 
   // All computed values - defined before any useEffect
   const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
-  const completedDocuments = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
+  const completedDocuments = state.documents.filter((doc) => (doc.status === 'completed' || doc.status === 'blocked') && doc.results)
   const selectedDocument = completedDocs.find(d => d.id === selectedDocId) || completedDocs[completedDocs.length - 1] || null
   const analysisResults = data || selectedDocument?.results
   const modes: Array<{ id: AnalysisMode; name: string; icon: typeof EyeIcon }> = [
@@ -569,7 +569,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   }
 
   const renderComparison = () => {
-    const completed = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
+    const completed = state.documents.filter((doc) => (doc.status === 'completed' || doc.status === 'blocked') && doc.results)
     if (completed.length < 2 || !selectedDocument?.results) {
       return (
         <div className="text-center py-12">
