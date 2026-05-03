@@ -492,7 +492,11 @@ class DataService {
   private isDeepfakeDocument(doc: any): boolean {
     const category = this.normalizeCategory(doc?.results?.authenticity?.category)
     const reason = String(doc?.blockedReason || '').toLowerCase()
-    return category === 'ai-generated' || reason.includes('deepfake') || reason.includes('ai-generated')
+    // Count ai-generated, forged, and tampered documents as deepfakes/threats
+    return ['ai-generated', 'forged', 'tampered'].includes(category) || 
+           reason.includes('deepfake') || 
+           reason.includes('ai-generated') ||
+           reason.includes('forged')
   }
 
   private formatTimeAgo(date: Date): string {

@@ -471,10 +471,14 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         }
       }
 
+      // Only compare to AUTHENTIC documents of same type — never to forged/blocked ones
       const sameTypeReference = [...state.documents]
         .filter((doc) =>
           doc.id !== documentId &&
-          (doc.status === 'completed' || doc.status === 'blocked') &&
+          doc.status === 'completed' &&  // Only completed (not blocked/forged)
+          !doc.results?.authenticity?.category?.includes('forged') &&
+          !doc.results?.authenticity?.category?.includes('tampered') &&
+          !doc.results?.authenticity?.category?.includes('ai-generated') &&
           doc.classification?.type === classification.type &&
           Boolean(doc.contentFingerprint)
         )
@@ -522,6 +526,16 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const adjustedCategory = sessionComparisonSuspect
         ? 'tampered'
         : (visionResult ? visionResult.category : determineCategory(aiDetectionResult, classification))
+      
+      // Boost confidence to match authScore for high-confidence authentic documents
+      let adjustedConfidence = visionResult 
+        ? visionResult.confidence 
+        : aiDetectionResult.confidence * 100
+      
+      // If no vision result but high authScore on high-risk doc, boost confidence accordingly
+      if (!visionResult && isHighRisk && adjustedAuthScore >= 80 && !sessionComparisonSuspect) {
+        adjustedConfidence = Math.max(adjustedConfidence, adjustedAuthScore - 5)
+      }
       const normalizedVisionCategory = String(visionResult?.category || '').toLowerCase()
       const requiresHeatmapFallback = Boolean(
         visionResult &&
@@ -573,7 +587,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const mockResults: any = {
         authenticity: {
           score: adjustedAuthScore,
-          confidence: visionResult ? visionResult.confidence : aiDetectionResult.confidence * 100,
+          confidence: adjustedConfidence,
           category: adjustedCategory,
           reasoning: sessionComparisonSuspect
             ? [
@@ -629,7 +643,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             extractedText: visionResult?.extractedText
               ? `${visionResult.extractedText}\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\nAuthenticity Score: ${adjustedAuthScore.toFixed(1)}%`
               : `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated || sessionComparisonSuspect ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${adjustedAuthScore.toFixed(1)}%`,
-            confidence: aiDetectionResult.confidence * 100,
+            confidence: adjustedConfidence,
             fontConsistency: (isManipulated || sessionComparisonSuspect) ? 45 + Math.random() * 20 : 85 + Math.random() * 12,
             alignmentScore: (isManipulated || sessionComparisonSuspect) ? 55 : 92,
             alignmentIssues: isManipulated
@@ -644,7 +658,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
               : [],
             signatureVerification: {
               isValid: !(isManipulated || sessionComparisonSuspect),
-              confidence: (isManipulated || sessionComparisonSuspect) ? 35 : 91
+              confidence: (isManipulated || sessionComparisonSuspect) ? 35 : Math.min(adjustedConfidence, 91)
             }
           }
         },
