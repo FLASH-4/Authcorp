@@ -26,9 +26,21 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const { state } = useForensics()
   const [activeMode, setActiveMode] = useState<AnalysisMode>('overview')
   const [selectedDocId, setSelectedDocId] = useState<string>('')
+
+  // All computed values - defined before any useEffect
   const completedDocs = state.documents.filter(d => d.status === 'completed' || d.status === 'blocked')
-  
-  // Auto-select newest completed doc when list changes
+  const completedDocuments = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
+  const selectedDocument = completedDocs.find(d => d.id === selectedDocId) || completedDocs[completedDocs.length - 1] || null
+  const analysisResults = data || selectedDocument?.results
+  const modes: Array<{ id: AnalysisMode; name: string; icon: typeof EyeIcon }> = [
+    { id: 'overview', name: 'Overview', icon: EyeIcon },
+    { id: 'heatmap', name: 'Heatmap', icon: ChartBarIcon },
+    { id: 'metadata', name: 'Metadata', icon: InformationCircleIcon },
+    { id: 'text', name: 'Text Analysis', icon: DocumentTextIcon },
+    { id: 'comparison', name: 'Comparison', icon: AdjustmentsHorizontalIcon },
+  ]
+
+  // All useEffects after computed values
   useEffect(() => {
     if (completedDocs.length > 0) {
       const latest = completedDocs[completedDocs.length - 1]
@@ -37,19 +49,6 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       }
     }
   }, [completedDocs.length]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const selectedDocument = completedDocs.find(d => d.id === selectedDocId) || completedDocs[completedDocs.length - 1] || null
-  const analysisResults = data || selectedDocument?.results
-
-  const completedDocuments = state.documents.filter((doc) => doc.status === 'completed' && doc.results)
-
-  const modes: Array<{ id: AnalysisMode; name: string; icon: typeof EyeIcon }> = [
-    { id: 'overview', name: 'Overview', icon: EyeIcon },
-    { id: 'heatmap', name: 'Heatmap', icon: ChartBarIcon },
-    { id: 'metadata', name: 'Metadata', icon: InformationCircleIcon },
-    { id: 'text', name: 'Text Analysis', icon: DocumentTextIcon },
-    { id: 'comparison', name: 'Comparison', icon: AdjustmentsHorizontalIcon },
-  ]
 
   useEffect(() => {
     if (!modes.some((mode) => mode.id === activeMode)) {
