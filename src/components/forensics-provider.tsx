@@ -472,6 +472,16 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         : calculateContextualScore(aiDetectionResult, classification)
       const isManipulated = visionResult ? visionResult.isManipulated : authScore < 60
       const isSuspicious = authScore < 80
+      const normalizedVisionCategory = String(visionResult?.category || '').toLowerCase()
+      const requiresHeatmapFallback = Boolean(
+        visionResult &&
+        ['ai-generated', 'tampered', 'forged'].includes(normalizedVisionCategory) &&
+        (!Array.isArray(visionResult.heatmapRegions) || visionResult.heatmapRegions.length === 0)
+      )
+      const fallbackHeatmapRegions = [
+        { x: 240, y: 100, width: 120, height: 120, confidence: 0.81, type: 'text_modification' },
+        { x: 220, y: 420, width: 130, height: 70, confidence: 0.76, type: 'color_mismatch' },
+      ]
 
       const mockResults: any = {
         authenticity: {
@@ -544,7 +554,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           // Only show vision-detected regions OR mock regions for manipulated docs
           // Never show mock regions for authentic/clean docs
           suspiciousRegions: visionResult
-            ? (visionResult.heatmapRegions || [])  // trust vision result completely
+            ? (requiresHeatmapFallback ? fallbackHeatmapRegions : (visionResult.heatmapRegions || []))
             : isManipulated
             ? [
                 { x: 80, y: 120, width: 240, height: 80, confidence: 0.82, type: 'text_modification' },

@@ -26,12 +26,21 @@ interface HeaderNotification {
   type: NotificationTone
 }
 
+const normalizeCategory = (raw: string | undefined) => String(raw || '').toLowerCase().replace(/_/g, '-')
+
+const isDeepfakeDoc = (doc: any) => {
+  const category = normalizeCategory(doc?.results?.authenticity?.category)
+  const reason = String(doc?.blockedReason || '').toLowerCase()
+  return category === 'ai-generated' || reason.includes('deepfake') || reason.includes('ai-generated')
+}
+
 const mapActivityToNotification = (activity: RecentActivity): HeaderNotification => {
-  const isAlert = activity.riskLevel === 'high' || ['tampered', 'forged', 'ai_generated', 'high_risk'].includes(activity.result)
+  const normalized = normalizeCategory(activity.result)
+  const isAlert = activity.riskLevel === 'high' || ['tampered', 'forged', 'ai-generated', 'high-risk'].includes(normalized)
 
   return {
     id: `activity-${activity.id}`,
-    title: isAlert ? `${activity.result.replace(/_/g, ' ')} document flagged` : 'Analysis completed',
+    title: isAlert ? `${normalized.replace(/-/g, ' ')} document flagged` : 'Analysis completed',
     message: `${activity.document} • ${activity.confidence.toFixed(1)}% confidence`,
     time: activity.time,
     type: isAlert ? 'warning' : 'success',
@@ -195,27 +204,12 @@ export function Header() {
     : 'Loading Status'
   // Use session documents to populate live stats
   const sessionAnalyzing = forensicsState.documents.filter(d => d.status === 'analyzing').length
-  const sessionCompleted = forensicsState.documents.filter(d => d.status === 'completed' || d.status === 'blocked').length
-  const [extraDeepfakes, setExtraDeepfakes] = useState(0)
-
-  // Listen for deepfake-detected events so the header counter updates immediately
-  useEffect(() => {
-    const handler = () => setExtraDeepfakes(prev => prev + 1)
-    window.addEventListener('deepfake-detected', handler)
-    return () => window.removeEventListener('deepfake-detected', handler)
-  }, [])
 
   const sessionDeepfakes = useMemo(() =>
-    forensicsState.documents.filter(d => 
-      d.status === 'blocked' || 
-      d.results?.authenticity?.category === 'ai-generated' ||
-      d.results?.authenticity?.category === 'tampered' ||
-      d.results?.authenticity?.category === 'forged' ||
-      (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 60)
-    ).length
+    forensicsState.documents.filter((d) => isDeepfakeDoc(d)).length
   , [forensicsState.documents])
   const activeAnalyses = sessionAnalyzing + (liveStats?.activeAnalyses ?? 0)
-  const deepfakesDetected = Math.max(sessionDeepfakes, extraDeepfakes) + (liveStats?.deepfakesDetected ?? 0)
+  const deepfakesDetected = liveStats?.deepfakesDetected ?? sessionDeepfakes
   const activePanelTitle = activePanel === 'profile' ? 'Profile Settings' : 'System Preferences'
   const activePanelDescription = activePanel === 'profile'
     ? 'Review the current signed-in account details and copy the account email.'

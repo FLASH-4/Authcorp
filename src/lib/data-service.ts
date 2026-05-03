@@ -71,10 +71,13 @@ class DataService {
     try {
       // Get LIVE statistics from localStorage and current session
       const documentsData = this.getDocumentsFromStorage()
-      const completedDocs = documentsData.filter(doc => doc.status === 'completed')
+      const analyzedDocs = documentsData.filter((doc) =>
+        (doc.status === 'completed' || doc.status === 'blocked') && Boolean(doc.results?.authenticity)
+      )
+      const completedDocs = analyzedDocs
       const authenticDocs = completedDocs.filter(doc => doc.results?.authenticity?.category === 'authentic')
-      const deepfakeDocs = completedDocs.filter(doc => doc.results?.authenticity?.category === 'ai-generated')
-      const tamperedDocs = completedDocs.filter(doc => doc.results?.authenticity?.category === 'tampered')
+      const deepfakeDocs = completedDocs.filter((doc) => this.isDeepfakeDocument(doc))
+      const tamperedDocs = completedDocs.filter(doc => doc.results?.authenticity?.category === 'tampered' || doc.results?.authenticity?.category === 'forged')
       const analyzingDocs = documentsData.filter(doc => doc.status === 'analyzing')
       const hasCompletedDocuments = completedDocs.length > 0
       
@@ -130,9 +133,27 @@ class DataService {
     }
 
     try {
+      const localDocs = this.getDocumentsFromStorage()
+      const sessionActivities: RecentActivity[] = localDocs
+        .filter((doc) => doc.status === 'completed' || doc.status === 'blocked')
+        .sort((a, b) => {
+          const aTime = new Date(a.uploadedAt || 0).getTime()
+          const bTime = new Date(b.uploadedAt || 0).getTime()
+          return bTime - aTime
+        })
+        .map((doc) => ({
+          id: doc.id,
+          type: this.isDeepfakeDocument(doc) ? 'alert' : 'analysis',
+          document: doc.filename || `Document ${String(doc.id || '').slice(-8)}`,
+          result: this.normalizeCategory(doc.results?.authenticity?.category || 'unknown'),
+          confidence: Number(doc.results?.authenticity?.confidence || 0),
+          time: this.formatTimeAgo(new Date(doc.uploadedAt || Date.now())),
+          userId: 'current-user',
+          riskLevel: this.calculateRiskLevel(Number(doc.results?.authenticity?.confidence || 0), doc.results)
+        }))
+
       const recentAnalyses = await analysisRepository.getRecentAnalyses(limit)
-      
-      const activities: RecentActivity[] = recentAnalyses.map(analysis => ({
+      const dbActivities: RecentActivity[] = recentAnalyses.map(analysis => ({
         id: analysis.id,
         type: 'analysis',
         document: `Document ${analysis.documentId.slice(-8)}`,
@@ -143,11 +164,34 @@ class DataService {
         riskLevel: this.calculateRiskLevel(analysis.confidence, analysis.results)
       }))
 
+      const mergedMap = new Map<string, RecentActivity>()
+      ;[...sessionActivities, ...dbActivities].forEach((item) => {
+        if (!mergedMap.has(item.id)) {
+          mergedMap.set(item.id, item)
+        }
+      })
+
+      const activities = Array.from(mergedMap.values()).slice(0, limit)
+
       this.setCache(cacheKey, activities, 15000) // Cache for 15 seconds
       return activities
     } catch (error) {
       console.error('Error fetching recent activity:', error)
-      return []
+      const localDocs = this.getDocumentsFromStorage()
+      return localDocs
+        .filter((doc) => doc.status === 'completed' || doc.status === 'blocked')
+        .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime())
+        .slice(0, limit)
+        .map((doc) => ({
+          id: doc.id,
+          type: this.isDeepfakeDocument(doc) ? 'alert' : 'analysis',
+          document: doc.filename || 'Document',
+          result: this.normalizeCategory(doc.results?.authenticity?.category || 'unknown'),
+          confidence: Number(doc.results?.authenticity?.confidence || 0),
+          time: this.formatTimeAgo(new Date(doc.uploadedAt || Date.now())),
+          userId: 'current-user',
+          riskLevel: this.calculateRiskLevel(Number(doc.results?.authenticity?.confidence || 0), doc.results)
+        }))
     }
   }
 
@@ -417,7 +461,7 @@ class DataService {
     if (!results) return 'unknown'
     
     if (results.authenticity) {
-      return results.authenticity.category || 'unknown'
+      return this.normalizeCategory(results.authenticity.category || 'unknown')
     }
     
     return 'unknown'
@@ -427,10 +471,28 @@ class DataService {
     if (results?.riskIntelligence?.riskCategory) {
       return results.riskIntelligence.riskCategory
     }
+
+    const category = this.normalizeCategory(results?.authenticity?.category)
+    if (['ai-generated', 'forged'].includes(category)) {
+      return 'high'
+    }
+    if (category === 'tampered') {
+      return 'medium'
+    }
     
     if (confidence < 50) return 'high'
     if (confidence < 80) return 'medium'
     return 'low'
+  }
+
+  private normalizeCategory(rawCategory: string | undefined): string {
+    return String(rawCategory || '').toLowerCase().replace(/_/g, '-') || 'unknown'
+  }
+
+  private isDeepfakeDocument(doc: any): boolean {
+    const category = this.normalizeCategory(doc?.results?.authenticity?.category)
+    const reason = String(doc?.blockedReason || '').toLowerCase()
+    return category === 'ai-generated' || reason.includes('deepfake') || reason.includes('ai-generated')
   }
 
   private formatTimeAgo(date: Date): string {

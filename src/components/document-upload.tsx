@@ -49,35 +49,9 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
     for (const file of acceptedFiles) {
       try {
         const documentId = await uploadDocument(file)
-        
-        // Broadcast the upload so dashboards and alerts can react without tight coupling.
-        window.dispatchEvent(new CustomEvent('document-uploaded', { 
-          detail: { documentId, filename: file.name } 
-        }))
-        
-        // Give the upload a moment to settle before triggering analysis.
-        setTimeout(() => {
-          analyzeDocument(documentId)
-          
-          // Keep the demo responsive by simulating the final threat check after analysis starts.
-          setTimeout(() => {
-            // Simulate ultra-sensitive AI detection
-            const isAIGenerated = Math.random() > 0.25 // 75% chance to detect AI for maximum security
-            const aiConfidence = Math.random() * 0.3 + 0.7 // 70-100% confidence
-            
-            if (isAIGenerated && aiConfidence > 0.75) {
-              toast.error('🚨 SECURITY THREAT: DEEPFAKE/AI CONTENT BLOCKED')
-              console.error('🚨 HIGH-CONFIDENCE AI CONTENT DETECTED AND BLOCKED')
-              
-              // Emit immediate security alert
-              window.dispatchEvent(new CustomEvent('security-threat-detected', { 
-                detail: { documentId, filename: file.name, threat: 'ai-generated' } 
-              }))
-            } else {
-              toast.success('✅ Document verified as authentic')
-            }
-          }, 2000)
-        }, 1000)
+
+        // Run the real analysis pipeline immediately; results/events are emitted by the provider.
+        void analyzeDocument(documentId)
       } catch (error) {
         console.error('Upload failed:', error)
       }

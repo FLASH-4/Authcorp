@@ -94,6 +94,39 @@ export function Dashboard({ analysisData }: DashboardProps) {
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  const normalizeCategory = (raw: string | undefined) => String(raw || '').toLowerCase().replace(/_/g, '-')
+  const isDeepfakeDocument = (doc: any) => {
+    const category = normalizeCategory(doc?.results?.authenticity?.category)
+    const reason = String(doc?.blockedReason || '').toLowerCase()
+    return category === 'ai-generated' || reason.includes('deepfake') || reason.includes('ai-generated')
+  }
+  const buildSessionActivity = (): RecentActivity[] => (
+    state.documents
+      .filter(d => d.status === 'completed' || d.status === 'blocked')
+      .map(d => ({
+        id: d.id,
+        type: isDeepfakeDocument(d) ? 'alert' as const : 'analysis' as const,
+        document: d.filename,
+        result: normalizeCategory(d.results?.authenticity?.category || 'unknown'),
+        confidence: d.results?.authenticity?.confidence || 75,
+        time: 'Just now',
+        userId: 'current-user',
+        riskLevel: isDeepfakeDocument(d)
+          ? 'high'
+          : ((d.results?.authenticity?.score || 75) > 70 ? 'low' : (d.results?.authenticity?.score || 75) > 40 ? 'medium' : 'high') as 'low' | 'medium' | 'high'
+      }))
+      .reverse()
+  )
+  const mergeActivity = (incoming: RecentActivity[]): RecentActivity[] => {
+    const merged = new Map<string, RecentActivity>()
+    ;[...buildSessionActivity(), ...incoming].forEach((item) => {
+      if (!merged.has(item.id)) {
+        merged.set(item.id, { ...item, result: normalizeCategory(item.result) })
+      }
+    })
+    return Array.from(merged.values()).slice(0, 10)
+  }
+
   const getTrendDays = (range: string) => {
     switch (range) {
       case '24h':
@@ -110,24 +143,9 @@ export function Dashboard({ analysisData }: DashboardProps) {
 
   // Update activity feed when session documents change
   useEffect(() => {
-    const sessionActivity: RecentActivity[] = state.documents
-      .filter(d => d.status === 'completed' || d.status === 'blocked')
-      .map(d => ({
-        id: d.id,
-        type: 'analysis' as const,
-        document: d.filename,
-        result: d.results?.authenticity?.category || 'authentic',
-        confidence: d.results?.authenticity?.confidence || 75,
-        time: 'Just now',
-        userId: 'current-user',
-        riskLevel: ((d.results?.authenticity?.score || 75) > 70 ? 'low' : (d.results?.authenticity?.score || 75) > 40 ? 'medium' : 'high') as 'low' | 'medium' | 'high'
-      }))
-      .reverse()
+    const sessionActivity = buildSessionActivity()
     if (sessionActivity.length > 0) {
-      setRecentActivity(prev => {
-        const dbActivity = prev.filter(a => !state.documents.find(d => d.id === a.id))
-        return [...sessionActivity, ...dbActivity].slice(0, 10)
-      })
+      setRecentActivity(prev => mergeActivity(prev))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.documents.length])
@@ -147,21 +165,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
         setRealTimeStats(stats)
 
         // Merge DB activity with current session documents
-        const sessionActivity: RecentActivity[] = state.documents
-          .filter(d => d.status === 'completed' || d.status === 'blocked')
-          .map(d => ({
-            id: d.id,
-            type: 'analysis' as const,
-            document: d.filename,
-            result: d.results?.authenticity?.category || 'authentic',
-            confidence: d.results?.authenticity?.confidence || 75,
-            time: 'Just now',
-            userId: 'current-user',
-            riskLevel: ((d.results?.authenticity?.score || 75) > 70 ? 'low' : (d.results?.authenticity?.score || 75) > 40 ? 'medium' : 'high') as 'low' | 'medium' | 'high'
-          }))
-          .reverse()
-
-        setRecentActivity([...sessionActivity, ...activity].slice(0, 10))
+        setRecentActivity(mergeActivity(activity))
         setTrendData(trends)
         setSystemHealth(health)
       } catch (error) {
@@ -175,7 +179,9 @@ export function Dashboard({ analysisData }: DashboardProps) {
 
     // Subscribe to real-time updates
     const unsubscribeStats = dataService.subscribe('stats_updated', setRealTimeStats)
-    const unsubscribeActivity = dataService.subscribe('activity_updated', setRecentActivity)
+    const unsubscribeActivity = dataService.subscribe('activity_updated', (incoming: RecentActivity[]) => {
+      setRecentActivity(mergeActivity(Array.isArray(incoming) ? incoming : []))
+    })
     const unsubscribeHealth = dataService.subscribe('health_updated', setSystemHealth)
 
     // Listen for user activities to trigger dashboard updates
@@ -269,13 +275,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
   ] : []
 
   const sessionDeepfakeCount = useMemo(() =>
-    state.documents.filter(d =>
-    d.status === 'blocked' ||
-    d.results?.authenticity?.category === 'ai-generated' ||
-    d.results?.authenticity?.category === 'tampered' ||
-    d.results?.authenticity?.category === 'forged' ||
-    (d.results?.authenticity?.score !== undefined && d.results.authenticity.score < 50)
-  ).length
+    state.documents.filter((d) => isDeepfakeDocument(d)).length
   , [state.documents])
 
   if (isLoading) {
@@ -288,11 +288,11 @@ export function Dashboard({ analysisData }: DashboardProps) {
   }
 
   const getResultColor = (result: string) => {
-    switch (result) {
+    switch (normalizeCategory(result)) {
       case 'authentic': return 'text-green-600 bg-green-100 dark:bg-green-900/20'
       case 'tampered': return 'text-red-600 bg-red-100 dark:bg-red-900/20'
       case 'forged': return 'text-orange-600 bg-orange-100 dark:bg-orange-900/20'
-      case 'ai_generated': return 'text-purple-600 bg-purple-100 dark:bg-purple-900/20'
+      case 'ai-generated': return 'text-purple-600 bg-purple-100 dark:bg-purple-900/20'
       case 'high_risk': return 'text-red-600 bg-red-100 dark:bg-red-900/20'
       default: return 'text-gray-600 bg-gray-100 dark:bg-gray-900/20'
     }
@@ -313,7 +313,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
     : engineHealth === 'degraded'
       ? 'bg-amber-500/90 text-white border border-amber-300/30'
       : 'bg-red-500/90 text-white border border-red-300/30'
-  const totalDeepfakes = sessionDeepfakeCount + (realTimeStats?.deepfakesDetected ?? 0)
+  const totalDeepfakes = realTimeStats?.deepfakesDetected ?? sessionDeepfakeCount
   const deepfakeAlertText = `🚨 ${totalDeepfakes} Deepfakes Detected - ${timeRangeLabel}`
   const engineSubtitle = realTimeStats
     ? `Monitoring ${realTimeStats.activeAnalyses} active analyses with ${realTimeStats.accuracyRate.toFixed(1)}% detection accuracy`
@@ -384,7 +384,7 @@ export function Dashboard({ analysisData }: DashboardProps) {
            </div>
            <div className="text-center">
              <div className="text-xl sm:text-2xl font-bold text-orange-400">
-               {state.documents.filter(d => d.results?.authenticity?.category === 'ai-generated').length || realTimeStats?.faceSwapsDetected || 0}
+               {state.documents.filter((d) => normalizeCategory(d.results?.authenticity?.category) === 'ai-generated').length || realTimeStats?.faceSwapsDetected || 0}
              </div>
              <div className="text-xs sm:text-sm text-gray-300">Face Swaps</div>
            </div>
