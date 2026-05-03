@@ -70,7 +70,7 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 export function RiskIntelligence({ data }: RiskIntelligenceProps) {
   const { state } = useForensics()
-  const [selectedDocument, setSelectedDocument] = useState<(typeof state.documents)[number] | null>(state.activeDocument ?? state.documents[0] ?? null)
+  const [selectedDocument, setSelectedDocument] = useState<(typeof state.documents)[number] | null>(state.activeDocument ?? state.documents.filter((doc) => doc.status === 'completed' || doc.status === 'blocked').slice(-1)[0] ?? state.documents[0] ?? null)
   const [isSearching, setIsSearching] = useState(false)
   const [searchProgress, setSearchProgress] = useState(0)
   const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'profile' | 'timeline'>('overview')
@@ -188,6 +188,26 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
   }, [selectedDocument])
 
   const riskFindings = (visionFindings.length > 0 ? visionFindings : null) ?? currentRiskIntelligence?.findings ?? fallbackFindings
+
+  useEffect(() => {
+    const selectedDocumentId = selectedDocument?.id
+    const activeDocumentId = state.activeDocument?.id
+    const latestCompletedDocument = state.documents.filter((doc) => doc.status === 'completed' || doc.status === 'blocked').slice(-1)[0] ?? state.documents[0] ?? null
+
+    if (activeDocumentId && activeDocumentId !== selectedDocumentId) {
+      setSelectedDocument(state.activeDocument)
+      return
+    }
+
+    if (!selectedDocumentId && latestCompletedDocument) {
+      setSelectedDocument(latestCompletedDocument)
+      return
+    }
+
+    if (selectedDocumentId && !state.documents.some((doc) => doc.id === selectedDocumentId) && latestCompletedDocument) {
+      setSelectedDocument(latestCompletedDocument)
+    }
+  }, [selectedDocument, state.activeDocument, state.documents])
 
   const riskScore = useMemo(() => {
     if (currentRiskIntelligence) {
@@ -881,7 +901,7 @@ export function RiskIntelligence({ data }: RiskIntelligenceProps) {
             className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Select Document</option>
-            {state.documents.filter(doc => doc.status === 'completed').map(doc => (
+            {state.documents.filter(doc => doc.status === 'completed' || doc.status === 'blocked').map(doc => (
               <option key={doc.id} value={doc.id}>
                 {doc.filename}
               </option>

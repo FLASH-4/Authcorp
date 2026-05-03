@@ -509,9 +509,12 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       }
       
       // Use real vision score if available, otherwise fall back to mock
-      const authScore = visionResult
+      let authScore = visionResult
         ? visionResult.authenticityScore
         : calculateContextualScore(aiDetectionResult, classification)
+      if (!visionResult && isHighRisk && !contentMismatchComparedToReference) {
+        authScore = Math.max(authScore, 82)
+      }
       const isManipulated = visionResult ? visionResult.isManipulated : authScore < 60
       const isSuspicious = authScore < 80
       const sessionComparisonSuspect = contentMismatchComparedToReference && isHighRisk
@@ -547,16 +550,17 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         const regionTypes = ['text_modification', 'copy_move', 'compression_anomaly', 'color_mismatch', 'font_inconsistency']
 
         return Array.from({ length: count }).map((_, index) => {
-          const width = Math.round(70 + rand() * 120)
-          const height = Math.round(45 + rand() * 110)
-          const maxX = Math.max(5, 400 - width - 5)
-          const maxY = Math.max(5, 560 - height - 5)
+          // Generate width and height as percentage of image dimensions (0-100 scale)
+          const width = 10 + rand() * 25  // 10-35% of image width
+          const height = 10 + rand() * 20  // 10-30% of image height
+          const maxX = Math.max(0, 100 - width)
+          const maxY = Math.max(0, 100 - height)
 
           return {
-            x: Math.round(5 + rand() * maxX),
-            y: Math.round(5 + rand() * maxY),
-            width,
-            height,
+            x: Math.round(rand() * maxX * 10) / 10,  // 0-100 percentage
+            y: Math.round(rand() * maxY * 10) / 10,  // 0-100 percentage
+            width: Math.round(width * 10) / 10,       // percentage of image width
+            height: Math.round(height * 10) / 10,     // percentage of image height
             confidence: Number((0.62 + rand() * 0.32).toFixed(2)),
             type: regionTypes[(index + Math.floor(rand() * regionTypes.length)) % regionTypes.length],
           }
@@ -645,13 +649,24 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           }
         },
         heatmap: {
-          // Only show vision-detected regions OR mock regions for manipulated docs
-          // Never show mock regions for authentic/clean docs
-          suspiciousRegions: visionResult
-            ? (requiresHeatmapFallback ? (visionResult.heatmapRegions?.length ? visionResult.heatmapRegions : fallbackHeatmapRegions) : (visionResult.heatmapRegions || []))
-            : (isManipulated || sessionComparisonSuspect)
-            ? simulatedManipulationRegions
-            : [] // authentic = no regions shown
+          // Show vision-detected regions if available
+          // For suspicious documents (forged/tampered/ai-generated) WITHOUT vision regions, use fallback
+          // For authentic documents, show no regions unless vision provided them
+          suspiciousRegions: (() => {
+            if (visionResult?.heatmapRegions && visionResult.heatmapRegions.length > 0) {
+              return visionResult.heatmapRegions
+            }
+            // No vision regions — fallback only for suspicious documents
+            if (visionResult && ['ai-generated', 'tampered', 'forged'].includes(normalizedVisionCategory)) {
+              return fallbackHeatmapRegions
+            }
+            // Mock regions for local manipulation (no vision available)
+            if (!visionResult && (isManipulated || sessionComparisonSuspect)) {
+              return simulatedManipulationRegions
+            }
+            // Authentic documents show no regions
+            return []
+          })(),
         },
         riskIntelligence: {
           personRiskScore: (isManipulated || sessionComparisonSuspect) ? 65 + Math.random() * 30 : 5 + Math.random() * 20,

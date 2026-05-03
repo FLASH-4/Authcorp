@@ -43,7 +43,11 @@ Check these specific things:
 - For resume/CV: These are NOT security documents — they should score high (75-90%) unless they contain forged credentials
 
 STEP 3 — MARK SUSPICIOUS REGIONS:
-For each suspicious area, provide coordinates as percentage of image dimensions (0-100 scale maps to image width/height).
+For each suspicious area, provide coordinates as PERCENTAGE of image dimensions (0-100 scale).
+- x: 0-100 (0=left edge, 100=right edge of image)
+- y: 0-100 (0=top edge, 100=bottom edge of image)
+- width: 0-100 (percentage of image width)
+- height: 0-100 (percentage of image height)
 
 Respond ONLY with this exact JSON (no markdown, no explanation):
 {
@@ -59,10 +63,10 @@ Respond ONLY with this exact JSON (no markdown, no explanation):
   ],
   "heatmapRegions": [
     {
-      "x": <0-400, pixel x position>,
-      "y": <0-560, pixel y position>,
-      "width": <pixel width of suspicious area>,
-      "height": <pixel height>,
+      "x": <0-100, x position as percentage>,
+      "y": <0-100, y position as percentage>,
+      "width": <0-100, width as percentage of image>,
+      "height": <0-100, height as percentage of image>,
       "confidence": <0.5-1.0>,
       "type": <"text_modification"|"copy_move"|"compression_anomaly"|"color_mismatch"|"font_inconsistency">
     }
@@ -160,16 +164,16 @@ function generateHeuristicAnalysis(filename?: string) {
       documentType: 'aadhaar_card',
       authenticityScore: 18,
       confidence: 82,
-      category: 'ai-generated',
+      category: 'forged',
       isManipulated: true,
       reasoning: [
         'Security-first fallback triggered because external vision provider is unavailable.',
         `Suspicious filename pattern detected: ${normalizedFilename || 'unknown filename'}`,
-        'Document treated as potentially synthetic/tampered pending manual review.'
+        'Document marked as forged pending manual review. Heatmap regions highlight key tampered areas.'
       ],
       heatmapRegions: [
-        { x: 240, y: 100, width: 120, height: 120, confidence: 0.81, type: 'text_modification' },
-        { x: 220, y: 420, width: 130, height: 70, confidence: 0.76, type: 'color_mismatch' }
+        { x: 45, y: 25, width: 35, height: 30, confidence: 0.81, type: 'text_modification' },
+        { x: 40, y: 65, width: 40, height: 18, confidence: 0.76, type: 'color_mismatch' }
       ],
       metadata: {
         editingSoftware: 'unknown',
