@@ -211,57 +211,68 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
       const allReasoning = (parsed.reasoning || []).join(' ').toLowerCase()
 
-      // ========== STEP 1: AADHAAR CARD CHECK (HIGHEST PRIORITY) ==========
-      // If ANY Aadhaar marker exists, it MUST be classified as aadhaar_card
-      const hasAadhaarMarker = 
-        allText.includes('uidai') ||
-        allText.includes('aadhaar') ||
-        allText.includes('आधार') ||
-        /\d{4}\s\d{4}\s\d{4}/.test(allText) || // 12-digit format XXXX XXXX XXXX
-        allReasoning.includes('uidai') ||
-        allReasoning.includes('aadhaar') ||
-        allReasoning.includes('आधार') ||
-        allReasoning.includes('12-digit')
+      // ========== CRITICAL: PRESERVE VISION API PHOTO & AI-GENERATED CLASSIFICATIONS ==========
+      // If Vision API correctly identified this as a photo or ai-generated, respect that
+      if (parsed.documentType === 'photo') {
+        console.log('✓ PHOTO DETECTED - Preserving Vision API classification as photo')
+        parsed.category = parsed.category || 'not-a-document'
+        // Don't override - this is NOT a document
+      } else if (parsed.category === 'ai-generated') {
+        console.log('✓ AI-GENERATED IMAGE DETECTED - Preserving Vision API ai-generated classification')
+        // Don't override the document type - AI-generated is the key finding
+      } else {
+        // ========== STEP 1: AADHAAR CARD CHECK (HIGHEST PRIORITY) ==========
+        // If ANY Aadhaar marker exists, it MUST be classified as aadhaar_card
+        const hasAadhaarMarker = 
+          allText.includes('uidai') ||
+          allText.includes('aadhaar') ||
+          allText.includes('आधार') ||
+          /\d{4}\s\d{4}\s\d{4}/.test(allText) || // 12-digit format XXXX XXXX XXXX
+          allReasoning.includes('uidai') ||
+          allReasoning.includes('aadhaar') ||
+          allReasoning.includes('आधार') ||
+          allReasoning.includes('12-digit')
 
-      if (hasAadhaarMarker) {
-        console.log('✓ AADHAAR CARD DETECTED - Setting documentType to aadhaar_card')
-        parsed.documentType = 'aadhaar_card'
-      }
-
-      // ========== STEP 2: DRIVING LICENSE CHECK (if NOT Aadhaar) ==========
-      // Only check for driving license if we didn't already detect Aadhaar
-      else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
-        const hasDrivingLicenseMarker =
-          allText.includes('driving license') ||
-          allText.includes('driving licence') ||
-          allText.includes('vehicle class') ||
-          (allText.includes('license number') && !allText.includes('uidai')) ||
-          (allText.includes('dl number') && !allText.includes('uidai')) ||
-          (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai')) ||
-          (allText.includes('rto') && !allText.includes('uidai'))
-
-        if (hasDrivingLicenseMarker) {
-          console.log('✓ DRIVING LICENSE DETECTED - Setting documentType to driving_license')
-          parsed.documentType = 'driving_license'
+        if (hasAadhaarMarker) {
+          console.log('✓ AADHAAR CARD DETECTED - Setting documentType to aadhaar_card')
+          parsed.documentType = 'aadhaar_card'
         }
-      }
 
-      // ========== STEP 3: PAN CARD CHECK (if NOT Aadhaar or Driving License) ==========
-      if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
-        const hasPanMarker =
-          allText.includes('permanent account number') ||
-          allText.includes('pan card') ||
-          (allText.includes('pan') && allText.includes('income tax')) ||
-          /[a-z]{5}[0-9]{4}[a-z]{1}/.test(allText)
+        // ========== STEP 2: DRIVING LICENSE CHECK (if NOT Aadhaar) ==========
+        // Only check for driving license if we didn't already detect Aadhaar
+        else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
+          const hasDrivingLicenseMarker =
+            allText.includes('driving license') ||
+            allText.includes('driving licence') ||
+            allText.includes('vehicle class') ||
+            (allText.includes('license number') && !allText.includes('uidai')) ||
+            (allText.includes('dl number') && !allText.includes('uidai')) ||
+            (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai')) ||
+            (allText.includes('rto') && !allText.includes('uidai'))
 
-        if (hasPanMarker) {
-          console.log('✓ PAN CARD DETECTED - Setting documentType to pan_card')
-          parsed.documentType = 'pan_card'
+          if (hasDrivingLicenseMarker) {
+            console.log('✓ DRIVING LICENSE DETECTED - Setting documentType to driving_license')
+            parsed.documentType = 'driving_license'
+          }
         }
-      }
 
-      // ========== STEP 4: PASSPORT/PHOTO/OTHER CHECKS ==========
-      // No additional corrections needed - Aadhaar and DL already handled in steps 1-2
+        // ========== STEP 3: PAN CARD CHECK (if NOT Aadhaar or Driving License) ==========
+        if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
+          const hasPanMarker =
+            allText.includes('permanent account number') ||
+            allText.includes('pan card') ||
+            (allText.includes('pan') && allText.includes('income tax')) ||
+            /[a-z]{5}[0-9]{4}[a-z]{1}/.test(allText)
+
+          if (hasPanMarker) {
+            console.log('✓ PAN CARD DETECTED - Setting documentType to pan_card')
+            parsed.documentType = 'pan_card'
+          }
+        }
+
+        // ========== STEP 4: PASSPORT/PHOTO/OTHER CHECKS ==========
+        // No additional corrections needed - Aadhaar and DL already handled in steps 1-2
+      }
 
       // Ensure all heatmap regions are in 0-100 percentage format
       const normalizedRegions = (Array.isArray(parsed.heatmapRegions) ? parsed.heatmapRegions : [])
