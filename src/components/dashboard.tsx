@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { flushSync } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
   ChartBarIcon,
@@ -185,60 +184,13 @@ export function Dashboard({ analysisData }: DashboardProps) {
 
     loadData()
 
-    // Subscribe to real-time updates
-    const unsubscribeStats = dataService.subscribe('stats_updated', (data) => {
-      try {
-        console.log('[Dashboard] Received stats_updated:', data)
-        // Force synchronous React update
-        flushSync(() => {
-          setRealTimeStats({...data})
-        })
-      } catch (err) {
-        console.error('[Dashboard] Error updating stats:', err)
-      }
-    })
-    const unsubscribeActivity = dataService.subscribe('activity_updated', (incoming: RecentActivity[]) => {
-      try {
-        console.log('[Dashboard] Received activity_updated:', incoming?.length, 'items')
-        // Force synchronous React update
-        flushSync(() => {
-          setRecentActivity(mergeActivity(Array.isArray(incoming) ? [...incoming] : []))
-        })
-      } catch (err) {
-        console.error('[Dashboard] Error updating activity:', err)
-      }
-    })
-    const unsubscribeHealth = dataService.subscribe('health_updated', (data) => {
-      try {
-        console.log('[Dashboard] Received health_updated:', data)
-        // Force synchronous React update
-        flushSync(() => {
-          setSystemHealth({...data})
-        })
-      } catch (err) {
-        console.error('[Dashboard] Error updating health:', err)
-      }
-    })
-
-    // Listen for user activities to trigger dashboard updates
-    const handleUserActivity = () => {
-      // Refresh data when user performs activities
+    // Poll every 1 second for updates (simpler and more reliable than subscriptions)
+    const pollInterval = setInterval(() => {
+      console.log('[Dashboard] Polling for updates...')
       loadData()
-    }
+    }, 1000)
 
-    // Listen for document upload/analysis events
-    window.addEventListener('document-uploaded', handleUserActivity)
-    window.addEventListener('analysis-completed', handleUserActivity)
-    window.addEventListener('risk-check-completed', handleUserActivity)
-
-    return () => {
-      unsubscribeStats()
-      unsubscribeActivity()
-      unsubscribeHealth()
-      window.removeEventListener('document-uploaded', handleUserActivity)
-      window.removeEventListener('analysis-completed', handleUserActivity)
-      window.removeEventListener('risk-check-completed', handleUserActivity)
-    }
+    return () => clearInterval(pollInterval)
   }, [timeRange])
 
   // Transform trend data for charts
