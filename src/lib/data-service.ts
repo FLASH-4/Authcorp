@@ -266,14 +266,27 @@ class DataService {
     }
     
     this.subscribers.get(event)!.push(callback)
+    console.log(`[DataService] Subscribed to ${event}. Total subscribers: ${this.subscribers.get(event)!.length}`)
     
     // Emit initial data immediately when subscribing (don't wait for next interval)
     if (event === 'stats_updated') {
-      this.getRealTimeStats().then(stats => callback(stats)).catch(console.error)
+      console.log(`[DataService] Sending initial stats to ${event}`)
+      this.getRealTimeStats().then(stats => {
+        console.log(`[DataService] Got initial stats:`, stats)
+        callback(stats)
+      }).catch(console.error)
     } else if (event === 'activity_updated') {
-      this.getRecentActivity().then(activity => callback(activity)).catch(console.error)
+      console.log(`[DataService] Sending initial activity to ${event}`)
+      this.getRecentActivity().then(activity => {
+        console.log(`[DataService] Got initial activity:`, activity.length, 'items')
+        callback(activity)
+      }).catch(console.error)
     } else if (event === 'health_updated') {
-      this.getSystemHealth().then(health => callback(health)).catch(console.error)
+      console.log(`[DataService] Sending initial health to ${event}`)
+      this.getSystemHealth().then(health => {
+        console.log(`[DataService] Got initial health:`, health)
+        callback(health)
+      }).catch(console.error)
     }
     
     // Return unsubscribe function
@@ -291,7 +304,8 @@ class DataService {
   // Emit events to subscribers
   private emit(event: string, data: any): void {
     const callbacks = this.subscribers.get(event)
-    if (callbacks) {
+    console.log(`[DataService] Emitting ${event} to ${callbacks?.length || 0} subscribers`)
+    if (callbacks && callbacks.length > 0) {
       callbacks.forEach(callback => {
         try {
           callback(data)
@@ -308,14 +322,17 @@ class DataService {
       try {
         // Update real-time stats
         const stats = await this.getRealTimeStats()
+        console.log(`[DataService] Broadcasting stats update - docs: ${stats.documentsProcessed}`)
         this.emit('stats_updated', stats)
         
         // Update recent activity
         const activity = await this.getRecentActivity()
+        console.log(`[DataService] Broadcasting activity update - items: ${activity.length}`)
         this.emit('activity_updated', activity)
         
         // Update system health
         const health = await this.getSystemHealth()
+        console.log(`[DataService] Broadcasting health update`)
         this.emit('health_updated', health)
         
       } catch (error) {
