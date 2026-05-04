@@ -321,7 +321,7 @@ class DataService {
       } catch (error) {
         console.error('Error in real-time updates:', error)
       }
-    }, 30000) // Update every 30 seconds
+    }, 1000) // Update every 1 second
   }
 
   // Cache management
