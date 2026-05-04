@@ -151,7 +151,7 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
       const snap = JSON.parse(raw)
       if (!snap?.timestamp || Date.now() - snap.timestamp > 1000 * 60 * 30) return
       
-      // Restore the previous scan
+      // Restore the previous scan results and image
       if (snap.capturedFrame) setCapturedFrame(snap.capturedFrame)
       if (snap.result) {
         const restoredResult = snap.result
@@ -161,6 +161,8 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
         }
         setScanResult(restoredResult)
       }
+      // Note: Camera state (camOn) is NOT restored - camera session is not persistent
+      // Only the scan results and preview image are persistent
     } catch (e) {
       // noop
     }
@@ -257,6 +259,7 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
           timestamp: Date.now(),
           capturedFrame: dataUrl,
           result,
+          camOn: true,
         }))
       } catch (e) {
         // noop

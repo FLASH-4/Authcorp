@@ -20,30 +20,40 @@ export async function POST(req: NextRequest) {
 
 STEP 1 — IDENTIFY THE DOCUMENT TYPE:
 Look carefully at the image. Identify what it is by these EXACT markers:
-- "aadhaar_card" — INDIAN IDENTITY CARD with:
-  * 12-digit number in format XXXX XXXX XXXX
-  * UIDAI (Unique Identification Authority of India) logo/text
-  * Blue/saffron/green color scheme (Indian tricolor colors)
-  * "Government of India" text in Hindi/English
-  * Hologram pattern or security features specific to Aadhaar
-  * Person's photo in a dedicated panel (usually upper-left)
-  * NO MRZ lines (those are for passports)
-  * Issued by UIDAI, NOT a travel document
-- "passport" — TRAVEL DOCUMENT with:
-  * Machine Readable Zone (MRZ) with 2 lines of text at BOTTOM
-  * "PASSPORT" word clearly visible
-  * Country name at top
-  * Different from Aadhaar - completely different layout and purpose
-  * NOT blue with UIDAI logo
+
+**FIRST RULE: Check for MRZ (Machine Readable Zone)**
+- If there are 2 lines of alphanumeric text at the BOTTOM of the document → PASSPORT
+- If NO MRZ lines → NOT a passport, look for other markers
+
+**AADHAAR_CARD indicators (NEVER confuse with Passport):**
+- 12-digit number in format XXXX XXXX XXXX
+- UIDAI (Unique Identification Authority of India) logo or text
+- "Government of India" text
+- Blue/saffron/green color scheme (Indian tricolor)
+- Portrait photo panel (usually upper-left or center)
+- Hologram or security features
+- NO MRZ lines (crucial difference from passport)
+
+**PASSPORT indicators:**
+- Machine Readable Zone (MRZ) = 2 lines of small alphanumeric text at the BOTTOM
+- "PASSPORT" word visible
+- Country name at top
+- MRZ is the key differentiator
+
+**Other types:**
 - "pan_card" — Indian tax card with 10-char alphanumeric PAN, Income Tax India text
-- "driving_license" — driving licence with vehicle classes, transport authority
-- "resume" — CV/resume with work experience, education sections, skills
-- "certificate" — academic or professional certificate
+- "driving_license" — vehicle classes, transport authority
+- "resume" — work experience, education sections
+- "certificate" — academic or professional certificate  
 - "bank_document" — bank statement, cheque
-- "photo" — just a selfie or photo of a person, NOT a document
+- "photo" — just a selfie or person photo, NOT a document
 - "unknown" — anything else
 
-CRITICAL: If you see UIDAI logo, 12-digit number, or "Government of India" with Aadhaar format, classify as "aadhaar_card" NEVER as passport. Passports have MRZ lines which Aadhaar does NOT have.
+**CRITICAL DECISION TREE:**
+1. Do you see MRZ lines at bottom? → PASSPORT
+2. Do you see UIDAI logo + 12-digit number + Government of India? → AADHAAR_CARD
+3. Do you see Government of India + portrait + NO MRZ? → AADHAAR_CARD
+4. Otherwise check other markers above
 
 STEP 2 — EXAMINE FOR FORGERY:
 Check these specific things:
@@ -154,12 +164,30 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       const clean = text.replace(/```json\n?|\n?```/g, '').trim()
       const parsed = JSON.parse(clean)
 
-      // Safety check: if Vision API says passport but text mentions Aadhaar/UIDAI, correct it
+      // Safety check: if Vision API says passport but text mentions Aadhaar/UIDAI/Government of India, correct it
       if (parsed.documentType === 'passport' && 
           (parsed.extractedText?.toLowerCase().includes('aadhaar') || 
            parsed.extractedText?.toLowerCase().includes('uidai') ||
-           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('aadhaar') || r?.toLowerCase().includes('uidai')))) {
+           parsed.extractedText?.toLowerCase().includes('government of india') ||
+           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('aadhaar') || r?.toLowerCase().includes('uidai') || r?.toLowerCase().includes('government of india')))) {
         console.log('Correcting passport → aadhaar_card based on extracted content')
+        parsed.documentType = 'aadhaar_card'
+      }
+      
+      // Also check if reasoning strongly suggests Aadhaar features
+      if (parsed.documentType === 'passport' && parsed.reasoning) {
+        const reasoning = parsed.reasoning.join(' ').toLowerCase()
+        if ((reasoning.includes('12-digit') || reasoning.includes('uidai logo') || reasoning.includes('aadhar')) && !reasoning.includes('mrz')) {
+          console.log('Correcting passport → aadhaar_card based on reasoning features')
+          parsed.documentType = 'aadhaar_card'
+        }
+      }
+
+      // Final comprehensive check: combine all text and check for Aadhaar markers
+      const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
+      if (parsed.documentType === 'passport' && 
+          (allText.includes('aadhar') || allText.includes('uidai') || (allText.includes('government of india') && !allText.includes('mrz')))) {
+        console.log('Correcting passport → aadhaar_card (final comprehensive check)')
         parsed.documentType = 'aadhaar_card'
       }
 
