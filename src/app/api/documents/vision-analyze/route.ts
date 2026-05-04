@@ -374,14 +374,36 @@ function generateHeuristicAnalysis(filename?: string) {
   const suspiciousNameHints = ['fake', 'deepfake', 'forged', 'forge', 'tamper', 'edited', 'manipulated', 'spoof', 'test']
   const hasSuspiciousNameHint = suspiciousNameHints.some((hint) => normalizedFilename.includes(hint))
   const isAadhaarFilename = normalizedFilename.includes('aadhaar') || normalizedFilename.includes('aadhar')
+  
+  // ========== DETECT PHOTOS ==========
+  const photoHints = ['profile', 'pic', 'photo', 'portrait', 'selfie', 'face', 'linkedin', 'facebook', 'headshot', 'avatar']
+  const isPhotoFilename = photoHints.some((hint) => normalizedFilename.includes(hint))
 
-  const aadhaarPhotoRegion = {
-    x: 13,
-    y: 24,
-    width: 25,
-    height: 33,
-    confidence: 0.9,
-    type: 'copy_move'
+  if (isPhotoFilename) {
+    return {
+      documentType: 'photo',
+      authenticityScore: 32,
+      confidence: 78,
+      category: 'not-a-document',
+      isManipulated: false,
+      reasoning: [
+        'File detected as a photo/portrait based on filename pattern.',
+        'This is a personal photo, not an official government document.',
+        'Vision API unavailable for detailed AI-generation analysis.',
+        'Could be AI-generated - recommend manual verification.'
+      ],
+      heatmapRegions: [
+        { x: 20, y: 10, width: 60, height: 70, confidence: 0.85, type: 'compression_anomaly' }
+      ],
+      metadata: {
+        editingSoftware: 'unknown',
+        tamperingClues: ['Photo file detected - not a security document'],
+        fontInconsistency: false,
+        colorAnomalies: false,
+      },
+      extractedText: '',
+      source: 'heuristic'
+    }
   }
 
   if (hasSuspiciousNameHint) {
@@ -399,7 +421,16 @@ function generateHeuristicAnalysis(filename?: string) {
           : 'Document marked as forged pending manual review. Heatmap regions highlight key tampered areas.'
       ],
       heatmapRegions: isAadhaarFilename
-        ? [aadhaarPhotoRegion]
+        ? [
+            {
+              x: 13,
+              y: 24,
+              width: 25,
+              height: 33,
+              confidence: 0.9,
+              type: 'copy_move'
+            }
+          ]
         : [
             { x: 45, y: 25, width: 35, height: 30, confidence: 0.81, type: 'text_modification' },
             { x: 40, y: 65, width: 40, height: 18, confidence: 0.76, type: 'color_mismatch' }
