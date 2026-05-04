@@ -158,7 +158,8 @@ export default function LiveScannerPage() {
 
       toast.loading('Analysing document...', { id: 'scan' })
 
-      const file = new File([blob], `live-scan-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      const filename = `live-scan-${Date.now()}.jpg`
+      const file = new File([blob], filename, { type: 'image/jpeg' })
       const docId = await uploadDocument(file)
       const analysisResult = (await analyzeDocument(docId)) as any
 
@@ -234,9 +235,8 @@ export default function LiveScannerPage() {
     return () => { releaseCameraStream() }
   }, [])
 
-  // Restore from session snapshot immediately on mount so tab switches keep the AR result stable
+  // Restore from session snapshot on mount so tab switches keep the AR result stable
   useEffect(() => {
-    if (capturedFrame || result) return
     try {
       if (typeof window === 'undefined') return
       const raw = sessionStorage.getItem('ar:lastScan')
@@ -244,15 +244,18 @@ export default function LiveScannerPage() {
       const snap = JSON.parse(raw)
       if (!snap?.timestamp || Date.now() - snap.timestamp > 1000 * 60 * 30) return
 
-      if (snap.previewUrl) setCapturedFrame(snap.previewUrl)
-      if (snap.result) {
-        setResult(snap.result)
-        setOverlays(Array.isArray(snap.overlays) ? snap.overlays : generateOverlays(snap.result))
+      // Only restore if no result is currently showing
+      if (!capturedFrame && !result) {
+        if (snap.previewUrl) setCapturedFrame(snap.previewUrl)
+        if (snap.result) {
+          setResult(snap.result)
+          setOverlays(Array.isArray(snap.overlays) ? snap.overlays : generateOverlays(snap.result))
+        }
       }
     } catch {
       // noop
     }
-  }, [capturedFrame, result])
+  }, [])
 
   // Restore last completed scan when returning to this page
   useEffect(() => {
@@ -526,7 +529,7 @@ export default function LiveScannerPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-4">
+<div className="grid grid-cols-2 gap-2 mb-4">
                   {[
                     { label: 'Authenticity', value: Math.round(result.authenticity.score), suffix: '/ 100', color: verdictColor },
                     { label: 'Confidence', value: `${Math.round(result.authenticity.confidence)}%`, suffix: '', color: 'text-cyan-400' },
@@ -535,9 +538,9 @@ export default function LiveScannerPage() {
                   ].map(item => {
                     const display = formatStat(item.value)
                     return (
-                      <div key={item.label} className="min-w-0 overflow-hidden rounded-xl bg-black/30 p-3 text-center">
-                        <p className="text-xs text-slate-400 mb-1">{item.label}</p>
-                        <p className={`max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-lg md:text-2xl font-bold capitalize ${item.color}`}>{display}</p>
+                      <div key={item.label} className="min-w-0 w-full rounded-xl bg-black/30 p-2 text-center">
+                        <p className="text-xs text-slate-400 truncate">{item.label}</p>
+                        <p className={`text-base font-bold line-clamp-1 ${item.color}`}>{display}</p>
                         {item.suffix && <p className="text-xs text-slate-500">{item.suffix}</p>}
                       </div>
                     )

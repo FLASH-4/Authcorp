@@ -97,6 +97,24 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const renderOverview = () => {
     const results = analysisResults || selectedDocument?.results
     const documentClassification = selectedDocument?.classification
+    
+    // Infer document type from analysis if classification is unknown (common for camera scans)
+    let inferredDocType = documentClassification?.type
+    let isInferredType = false
+    if (!inferredDocType || inferredDocType === 'unknown') {
+      // For camera scans, try to infer from heatmap regions and analysis content
+      const regions = results?.heatmap?.suspiciousRegions || []
+      const hasPortraitRegion = regions.some((r: any) => r.type === 'copy_move' && r.y > 20 && r.y < 40 && r.x < 30)
+      const textHasAadhaar = results?.forensics?.metadataAnalysis?.tamperingClues?.some?.((c: string) => c?.toLowerCase?.().includes('aadhaar'))
+      if (hasPortraitRegion || textHasAadhaar) {
+        inferredDocType = 'aadhar_card'
+        isInferredType = true
+      } else {
+        inferredDocType = 'unknown'
+        isInferredType = true
+      }
+    }
+    
     const isHighRiskDocument = documentClassification && ['aadhar_card', 'passport', 'driving_license', 'pan_card', 'voter_id'].includes(documentClassification.type)
     const shouldShowThreatAlert = results && (
       (results.authenticity.category === 'ai-generated' && isHighRiskDocument && results.authenticity.confidence > 70) ||
@@ -118,19 +136,19 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
             <div className="bg-red-600 text-white px-4 py-2 rounded-lg mb-4">
               <p className="font-bold">
                 {results.authenticity.category === 'ai-generated' ? 
-                  `AI-GENERATED ${documentClassification?.type.toUpperCase().replace('_', ' ')} DETECTED` : 
+                  `AI-GENERATED ${inferredDocType?.toUpperCase().replace('_', ' ')} DETECTED` : 
                   'CRITICAL DOCUMENT TAMPERING DETECTED'
                 }
               </p>
             </div>
             <p className="text-red-700 dark:text-red-300 mb-4">
-              This {documentClassification?.type.replace('_', ' ') || 'document'} has been flagged as {results.authenticity.category.toUpperCase()} with {results.authenticity.confidence.toFixed(1)}% confidence.
+              This {(inferredDocType || 'document').replace('_', ' ')} has been flagged as {results.authenticity.category.toUpperCase()} with {results.authenticity.confidence.toFixed(1)}% confidence.
               <strong> ACCESS BLOCKED FOR SECURITY.</strong>
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div className="bg-red-100 dark:bg-red-800/30 p-3 rounded-lg">
                 <h4 className="font-semibold text-red-900 dark:text-red-100">Document Type</h4>
-                <p className="text-red-700 dark:text-red-300">{documentClassification?.type.toUpperCase().replace('_', ' ') || 'UNKNOWN'}</p>
+                <p className="text-red-700 dark:text-red-300">{(inferredDocType || 'document').toUpperCase().replace('_', ' ')}</p>
               </div>
               <div className="bg-red-100 dark:bg-red-800/30 p-3 rounded-lg">
                 <h4 className="font-semibold text-red-900 dark:text-red-100">Threat Level</h4>
@@ -167,20 +185,23 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
               <div>
                 <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Identified Type</h4>
                 <p className="text-blue-700 dark:text-blue-300 text-lg font-semibold">
-                  {documentClassification.type === 'photo'
-                    ? 'PHOTO / NOT A DOCUMENT'
-                    : documentClassification.type.toUpperCase().replace(/_/g, ' ')}
+                  {inferredDocType === 'photo'
+                    ? '📷 PHOTO / NOT A DOCUMENT'
+                    : isInferredType && inferredDocType === 'unknown'
+                    ? '📱 CAMERA SCANNED DOCUMENT'
+                    : (inferredDocType || 'document').toUpperCase().replace(/_/g, ' ')}
                 </p>
                 <p className="text-blue-600 dark:text-blue-400 text-sm">
-                  Confidence: {(documentClassification.confidence * 100).toFixed(1)}%
+                  Confidence: {(documentClassification?.confidence || 0.7 * 100).toFixed(1)}%
                 </p>
               </div>
               <div>
                 <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Verification Status</h4>
                 <p className="text-blue-700 dark:text-blue-300">
-                  {documentClassification.type === 'photo' ? 'ℹ️ Plain Photo — Not a Security Document' :
+                  {inferredDocType === 'photo' ? 'ℹ️ Plain Photo — Not a Security Document' :
+                   isInferredType && inferredDocType === 'unknown' ? 'ℹ️ Camera Scanned Document' :
                    results?.authenticity.category === 'authentic' ? '✅ Verified Authentic' : 
-                   results?.authenticity.category === 'ai-generated' && documentClassification.type === 'presentation' ? 'ℹ️ AI Content (Normal for Presentations)' :
+                   results?.authenticity.category === 'ai-generated' && inferredDocType === 'presentation' ? 'ℹ️ AI Content (Normal for Presentations)' :
                    results?.authenticity.category === 'ai-generated' ? '🚨 AI-Generated Content Detected' :
                    results?.authenticity.category === 'tampered' ? '⚠️ Tampering Detected' :
                    results?.authenticity.category === 'forged' ? '🚨 Forgery Detected' :
