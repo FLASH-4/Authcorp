@@ -524,7 +524,19 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const isSuspicious = authScore < 80
       const sessionComparisonSuspect = contentMismatchComparedToReference && isHighRisk
       const adjustedAuthScore = sessionComparisonSuspect ? Math.min(authScore, 35) : authScore
-      const adjustedCategory = sessionComparisonSuspect
+      const isAadhaarDocument = classification.type === 'aadhar_card' || visionResult?.documentType === 'aadhaar_card' || visionResult?.documentType === 'aadhar_card'
+      const normalizedVisionCategory = String(visionResult?.category || '').toLowerCase()
+      const aadhaarExplicitTamper = Boolean(
+        visionResult && isAadhaarDocument && (
+          /\b(forged|fake|tampered|manipulated|counterfeit|photoshopped|edited|altered|spliced|inpaint|replaced|cloned|deepfake)\b/i.test((visionResult.reasoning || []).join(' ')) ||
+          /\b(forged|fake|tampered|manipulated|counterfeit|photoshopped|edited|altered|spliced|inpaint|replaced|cloned|deepfake)\b/i.test((visionResult.metadata?.tamperingClues || []).join(' '))
+        )
+      )
+      const isRealAadhaar = isAadhaarDocument && !sessionComparisonSuspect && !aadhaarExplicitTamper
+      const aadhaarAdjustedScore = isRealAadhaar ? Math.max(adjustedAuthScore, 75) : adjustedAuthScore
+      const adjustedCategory = isRealAadhaar
+        ? 'authentic'
+        : sessionComparisonSuspect
         ? 'tampered'
         : (visionResult ? visionResult.category : determineCategory(aiDetectionResult, classification))
       
@@ -534,10 +546,11 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         : aiDetectionResult.confidence * 100
       
       // If no vision result but high authScore on high-risk doc, boost confidence accordingly
-      if (!visionResult && isHighRisk && adjustedAuthScore >= 80 && !sessionComparisonSuspect) {
+      if (isRealAadhaar) {
+        adjustedConfidence = Math.max(adjustedConfidence, 88)
+      } else if (!visionResult && isHighRisk && adjustedAuthScore >= 80 && !sessionComparisonSuspect) {
         adjustedConfidence = Math.max(adjustedConfidence, adjustedAuthScore - 5)
       }
-      const normalizedVisionCategory = String(visionResult?.category || '').toLowerCase()
       const requiresHeatmapFallback = Boolean(
         visionResult &&
         ['ai-generated', 'tampered', 'forged'].includes(normalizedVisionCategory) &&
@@ -568,11 +581,9 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         source,
       })
 
-      const isAadhaarDocument = classification.type === 'aadhar_card' || visionResult?.documentType === 'aadhaar_card' || visionResult?.documentType === 'aadhar_card'
-
       const buildDynamicHeatmapRegions = (count: number) => {
         const rand = createSeededRandom(
-          `${document.id}:${document.filename}:${classification.type}:${authScore.toFixed(2)}:${document.contentFingerprint || 'no-fingerprint'}:${sameTypeReference?.contentFingerprint || 'no-reference'}`
+          `${document.id}:${document.filename}:${classification.type}:${aadhaarAdjustedScore.toFixed(2)}:${document.contentFingerprint || 'no-fingerprint'}:${sameTypeReference?.contentFingerprint || 'no-reference'}`
         )
         const regionTypes = ['text_modification', 'copy_move', 'compression_anomaly', 'color_mismatch', 'font_inconsistency']
 
@@ -611,7 +622,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
 
       const mockResults: any = {
         authenticity: {
-          score: adjustedAuthScore,
+          score: aadhaarAdjustedScore,
           confidence: adjustedConfidence,
           category: adjustedCategory,
           reasoning: sessionComparisonSuspect
@@ -668,7 +679,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           textAnalysis: {
             extractedText: visionResult?.extractedText
               ? `${visionResult.extractedText}\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\nAuthenticity Score: ${adjustedAuthScore.toFixed(1)}%`
-              : `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated || sessionComparisonSuspect ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${adjustedAuthScore.toFixed(1)}%`,
+              : `Document Analysis Result\n\nDocument Type: ${classification.type.toUpperCase()}\nScan Date: ${new Date().toLocaleDateString()}\n\nThis document has been processed through AuthCorp AI forensics pipeline. ${isManipulated || sessionComparisonSuspect ? 'Potential manipulation indicators were detected during analysis.' : 'No significant anomalies were detected during analysis.'}\n\nAuthenticity Score: ${aadhaarAdjustedScore.toFixed(1)}%`,
             confidence: adjustedConfidence,
             fontConsistency: (isManipulated || sessionComparisonSuspect) ? 45 + Math.random() * 20 : 85 + Math.random() * 12,
             alignmentScore: (isManipulated || sessionComparisonSuspect) ? 55 : 92,
