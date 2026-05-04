@@ -228,36 +228,39 @@ export default function LiveScannerPage() {
       const uploadedAt = new Date(latest.uploadedAt).getTime()
       if (Date.now() - uploadedAt > 1000 * 60 * 30) return
 
-      // Populate the UI from the stored document
+      // Populate the UI from the stored document's real results only
       if (latest.previewUrl) {
         setCapturedFrame(latest.previewUrl)
       }
 
-      const auth = (latest.results?.authenticity ?? {}) as any
-      const risk = (latest.results?.riskIntelligence ?? {}) as any
-      const resAny = (latest.results ?? {}) as any
+      const auth = latest.results?.authenticity
+      const risk = latest.results?.riskIntelligence
+      const resAny = (latest.results as any)
 
-      const restored: ScanResult = {
-        authenticity: {
-          score: auth.score ?? Math.round(Math.random() * 35 + 55),
-          category: auth.category ?? 'authentic',
-          confidence: auth.confidence ?? 85,
-        },
-        riskLevel: risk.riskCategory ?? (auth.score > 70 ? 'low' : auth.score > 40 ? 'medium' : 'high'),
-        riskScore: risk.personRiskScore ?? Math.round((100 - (auth.score ?? 70)) * 0.8),
-        verdict: auth.score > 70 ? 'authentic' : auth.score > 40 ? 'suspicious' : 'tampered',
-        evidence: latest.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
-        recommendation: auth.score > 70
-          ? 'Document appears authentic. Standard processing can proceed.'
-          : auth.score > 40
-          ? 'Flag for manual review. Some inconsistencies detected.'
-          : 'Reject document. High-confidence manipulation detected.',
-        processingTime: resAny.processingTime ?? 1.2,
+      // Only restore a full ScanResult if the saved analysis contains a numeric score
+      if (auth && typeof auth.score === 'number') {
+        const restored: ScanResult = {
+          authenticity: {
+            score: auth.score,
+            category: auth.category ?? 'unknown',
+            confidence: auth.confidence ?? 0,
+          },
+          riskLevel: risk?.riskCategory ?? (auth.score > 70 ? 'low' : auth.score > 40 ? 'medium' : 'high'),
+          riskScore: risk?.personRiskScore ?? Math.round((100 - auth.score) * 0.8),
+          verdict: auth.score > 70 ? 'authentic' : auth.score > 40 ? 'suspicious' : 'tampered',
+          evidence: latest.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
+          recommendation: auth.score > 70
+            ? 'Document appears authentic. Standard processing can proceed.'
+            : auth.score > 40
+            ? 'Flag for manual review. Some inconsistencies detected.'
+            : 'Reject document. High-confidence manipulation detected.',
+          processingTime: resAny?.processingTime ?? 1.2,
+        }
+
+        setResult(restored)
+        setOverlays(generateOverlays(restored))
+        setScanCount(c => c + 1)
       }
-
-      setResult(restored)
-      setOverlays(generateOverlays(restored))
-      setScanCount(c => c + 1)
     } catch (e) {
       // noop
     }
@@ -320,9 +323,9 @@ export default function LiveScannerPage() {
 
             {/* Captured frame + AR overlays */}
             {capturedFrame && (
-              <div className="relative w-full h-full">
+              <div className="relative w-full h-full overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={capturedFrame} alt="Scanned frame" className="w-full h-full object-contain" />
+                <img src={capturedFrame} alt="Scanned frame" className="w-full h-full object-cover" />
                 <AnimatePresence>
                   {overlays.map(box => {
                     const c = overlayColors[box.color]
