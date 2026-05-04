@@ -164,20 +164,28 @@ export default function LiveScannerPage() {
 
       const auth = analysisResult?.results?.authenticity || {}
       const risk = analysisResult?.results?.riskIntelligence || {}
+      const score = typeof auth.score === 'number'
+        ? auth.score
+        : auth.category === 'tampered' || auth.category === 'forged' || auth.category === 'ai-generated'
+        ? 28
+        : 92
+      const confidence = typeof auth.confidence === 'number' ? auth.confidence : (score > 70 ? 88 : 62)
+      const riskScore = typeof risk.personRiskScore === 'number' ? risk.personRiskScore : Math.max(0, Math.min(100, (100 - score) * 0.8))
+      const normalizedRiskScore = Math.round(riskScore * 10) / 10
 
       const scanResult: ScanResult = {
         authenticity: {
-          score: auth.score ?? Math.round(Math.random() * 35 + 55),
+          score,
           category: auth.category ?? 'authentic',
-          confidence: auth.confidence ?? 85,
+          confidence,
         },
-        riskLevel: risk.riskCategory ?? (auth.score > 70 ? 'low' : auth.score > 40 ? 'medium' : 'high'),
-        riskScore: risk.personRiskScore ?? Math.round((100 - (auth.score ?? 70)) * 0.8),
-        verdict: auth.score > 70 ? 'authentic' : auth.score > 40 ? 'suspicious' : 'tampered',
+        riskLevel: risk.riskCategory ?? (score > 70 ? 'low' : score > 40 ? 'medium' : 'high'),
+        riskScore: normalizedRiskScore,
+        verdict: score > 70 ? 'authentic' : score > 40 ? 'suspicious' : 'tampered',
         evidence: analysisResult?.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
-        recommendation: auth.score > 70
+        recommendation: score > 70
           ? 'Document appears authentic. Standard processing can proceed.'
-          : auth.score > 40
+          : score > 40
           ? 'Flag for manual review. Some inconsistencies detected.'
           : 'Reject document. High-confidence manipulation detected.',
         processingTime: analysisResult?.processingTime ?? 1.4,
@@ -226,6 +234,26 @@ export default function LiveScannerPage() {
     return () => { releaseCameraStream() }
   }, [])
 
+  // Restore from session snapshot immediately on mount so tab switches keep the AR result stable
+  useEffect(() => {
+    if (capturedFrame || result) return
+    try {
+      if (typeof window === 'undefined') return
+      const raw = sessionStorage.getItem('ar:lastScan')
+      if (!raw) return
+      const snap = JSON.parse(raw)
+      if (!snap?.timestamp || Date.now() - snap.timestamp > 1000 * 60 * 30) return
+
+      if (snap.previewUrl) setCapturedFrame(snap.previewUrl)
+      if (snap.result) {
+        setResult(snap.result)
+        setOverlays(Array.isArray(snap.overlays) ? snap.overlays : generateOverlays(snap.result))
+      }
+    } catch {
+      // noop
+    }
+  }, [capturedFrame, result])
+
   // Restore last completed scan when returning to this page
   useEffect(() => {
     if (capturedFrame) return // already showing a frame
@@ -260,7 +288,7 @@ export default function LiveScannerPage() {
             confidence: auth.confidence ?? 0,
           },
           riskLevel: risk?.riskCategory ?? (auth.score > 70 ? 'low' : auth.score > 40 ? 'medium' : 'high'),
-          riskScore: risk?.personRiskScore ?? Math.round((100 - auth.score) * 0.8),
+          riskScore: Math.round(((risk?.personRiskScore ?? (100 - auth.score) * 0.8) as number) * 10) / 10,
           verdict: auth.score > 70 ? 'authentic' : auth.score > 40 ? 'suspicious' : 'tampered',
           evidence: latest.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
           recommendation: auth.score > 70
@@ -273,6 +301,16 @@ export default function LiveScannerPage() {
 
         setResult(restored)
         setOverlays(generateOverlays(restored))
+        try {
+          sessionStorage.setItem('ar:lastScan', JSON.stringify({
+            timestamp: Date.now(),
+            previewUrl: latest.previewUrl,
+            result: restored,
+            overlays: generateOverlays(restored),
+          }))
+        } catch {
+          // noop
+        }
         setScanCount(c => c + 1)
       }
     } catch (e) {
@@ -497,9 +535,9 @@ export default function LiveScannerPage() {
                   ].map(item => {
                     const display = formatStat(item.value)
                     return (
-                      <div key={item.label} className="rounded-xl bg-black/30 p-3 text-center">
+                      <div key={item.label} className="min-w-0 overflow-hidden rounded-xl bg-black/30 p-3 text-center">
                         <p className="text-xs text-slate-400 mb-1">{item.label}</p>
-                        <p className={`text-2xl font-bold capitalize ${item.color} truncate`}>{display}</p>
+                        <p className={`max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-lg md:text-2xl font-bold capitalize ${item.color}`}>{display}</p>
                         {item.suffix && <p className="text-xs text-slate-500">{item.suffix}</p>}
                       </div>
                     )
