@@ -121,8 +121,20 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
         inferredDocType = 'driving_license'
         isInferredType = true
       } else {
-        inferredDocType = 'unknown'
-        isInferredType = true
+        // Check for PAN card
+        const textHasPan = results?.forensics?.metadataAnalysis?.tamperingClues?.some?.((c: string) => 
+          c?.toLowerCase?.().includes('pan') || 
+          c?.toLowerCase?.().includes('income tax') ||
+          c?.toLowerCase?.().includes('permanent account number') ||
+          /[A-Z]{5}[0-9]{4}[A-Z]{1}/.test(c) // PAN format: AAAAA0000A
+        )
+        if (textHasPan) {
+          inferredDocType = 'pan_card'
+          isInferredType = true
+        } else {
+          inferredDocType = 'unknown'
+          isInferredType = true
+        }
       }
     }
     

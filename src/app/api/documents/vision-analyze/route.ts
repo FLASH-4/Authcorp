@@ -213,6 +213,17 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         parsed.documentType = 'driving_license'
       }
 
+      // Check for PAN card misclassified as passport/unknown
+      if ((parsed.documentType === 'passport' || parsed.documentType === 'unknown') &&
+          (allText.includes('pan') || 
+           allText.includes('income tax') || 
+           (allText.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/) && allText.includes('india')) ||
+           allText.includes('pan number') ||
+           allText.includes('permanent account number'))) {
+        console.log('Correcting to pan_card based on PAN patterns')
+        parsed.documentType = 'pan_card'
+      }
+
       // Ensure all heatmap regions are in 0-100 percentage format
       const normalizedRegions = (Array.isArray(parsed.heatmapRegions) ? parsed.heatmapRegions : [])
         .slice(0, 6)

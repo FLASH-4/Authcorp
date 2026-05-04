@@ -140,7 +140,10 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
   const [scanCount, setScanCount] = useState(0)
   const liveVideoRef = useRef<HTMLVideoElement>(null)
   const liveCanvasRef = useRef<HTMLCanvasElement>(null)
-  const liveStreamRef = useRef<MediaStream | null>(null)
+  // Use global stream storage to persist across component unmounts during navigation
+  const liveStreamRef = useRef<MediaStream | null>(
+    typeof window !== 'undefined' ? (window as any).__globalArCameraStream || null : null
+  )
 
   // Restore last AR scan from sessionStorage on mount for tab switch persistence
   useEffect(() => {
@@ -165,8 +168,13 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
       if (snap.overlayBoxes && Array.isArray(snap.overlayBoxes)) {
         setOverlayBoxes(snap.overlayBoxes)
       }
-      // Restore camera UI state to match previous session
+      // Restore camera UI state to match previous session and reconnect global stream if available
       if (snap.camOn) {
+        const globalStream = (window as any).__globalArCameraStream
+        if (globalStream && liveStreamRef.current !== globalStream) {
+          liveStreamRef.current = globalStream
+          console.log('Reconnecting to persisted camera stream after navigation')
+        }
         setCamOn(true)
       }
     } catch (e) {
@@ -174,18 +182,29 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
     }
   }, [])
 
-  // Cleanup camera on unmount
+  // Detect actual page unload to stop camera properly
   useEffect(() => {
-    return () => {
-      // Stop camera stream when component unmounts
-      if (liveStreamRef.current) {
-        liveStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => {
+    if (typeof window === 'undefined') return
+    
+    const handleBeforeUnload = () => {
+      // Stop camera tracks only when page actually closes
+      const globalStream = (window as any).__globalArCameraStream
+      if (globalStream) {
+        globalStream.getTracks().forEach((track: MediaStreamTrack) => {
           track.stop()
         })
-        liveStreamRef.current = null
+        (window as any).__globalArCameraStream = null
       }
     }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
   }, [])
+
+  // Don't cleanup camera on component unmount - let it persist for internal page navigation
+  // The stream is stored globally and only stopped when user clicks "Stop Camera" or page unloads
 
   // Handle tab visibility changes to pause/resume video without stopping stream
   useEffect(() => {
@@ -273,6 +292,10 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
         audio: false,
       })
       liveStreamRef.current = stream
+      // Store globally to persist across page navigation
+      if (typeof window !== 'undefined') {
+        (window as any).__globalArCameraStream = stream
+      }
       if (liveVideoRef.current) {
         liveVideoRef.current.srcObject = stream
         await liveVideoRef.current.play()
@@ -298,6 +321,10 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
           track.stop()
         })
         liveStreamRef.current = null
+        // Clear global reference
+        if (typeof window !== 'undefined') {
+          (window as any).__globalArCameraStream = null
+        }
       }
       
       // Clear video element
