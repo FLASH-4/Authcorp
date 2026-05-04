@@ -187,13 +187,53 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
     }
   }, [])
 
+  // Handle tab visibility changes to pause/resume video without stopping stream
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    
+    const handleVisibilityChange = () => {
+      const video = liveVideoRef.current
+      if (!video) return
+      
+      if (document.hidden) {
+        // Tab became inactive - pause video but keep stream alive
+        video.pause()
+      } else {
+        // Tab became active again - resume video if camera is on
+        if (camOn && video.srcObject) {
+          video.play().catch((err) => {
+            console.error('Failed to resume video:', err)
+          })
+        }
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [camOn])
+
   // Attach stream to video element once camera starts
   useEffect(() => {
     if (camOn && liveStreamRef.current && liveVideoRef.current) {
       const video = liveVideoRef.current
       if (video.srcObject !== liveStreamRef.current) {
         video.srcObject = liveStreamRef.current
-        video.play().catch(() => {})
+        // Wait for metadata to load, then play
+        video.onloadedmetadata = () => {
+          video.play().catch((err) => {
+            console.error('Failed to play video:', err)
+            setCamError('Failed to start video playback')
+          })
+        }
+        // In case metadata is already loaded
+        if (video.readyState >= 1) {
+          video.play().catch((err) => {
+            console.error('Failed to play video:', err)
+            setCamError('Failed to start video playback')
+          })
+        }
       }
     }
   }, [camOn])
@@ -278,8 +318,15 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
       const video = liveVideoRef.current
       const canvas = liveCanvasRef.current
       if (!video || !canvas) throw new Error('No video')
+      // Ensure video is ready
+      if (video.readyState < 2) {
+        throw new Error('Video stream not ready. Ensure camera access is granted.')
+      }
       canvas.width = video.videoWidth || 1280
       canvas.height = video.videoHeight || 720
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Invalid video dimensions')
+      }
       const ctx = canvas.getContext('2d')!
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
@@ -370,7 +417,8 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
               autoPlay
               playsInline
               muted
-              className={`w-full h-full object-contain ${capturedFrame || !camOn ? 'hidden' : 'block'}`}
+              crossOrigin="anonymous"
+              className={`w-full h-full object-cover bg-slate-900 ${capturedFrame || !camOn ? 'hidden' : 'block'}`}
             />
             {capturedFrame && (
               <div className="relative w-full h-full">
