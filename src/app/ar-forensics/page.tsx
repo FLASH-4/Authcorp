@@ -244,15 +244,18 @@ export default function LiveScannerPage() {
       const snap = JSON.parse(raw)
       if (!snap?.timestamp || Date.now() - snap.timestamp > 1000 * 60 * 30) return
 
-      // Only restore if no result is currently showing
-      if (!capturedFrame && !result) {
-        if (snap.previewUrl) setCapturedFrame(snap.previewUrl)
-        if (snap.result) {
-          setResult(snap.result)
-          setOverlays(Array.isArray(snap.overlays) ? snap.overlays : generateOverlays(snap.result))
+      // Restore always on mount - sessionStorage is for cross-navigation persistence
+      if (snap.previewUrl) setCapturedFrame(snap.previewUrl)
+      if (snap.result) {
+        const restoredResult = snap.result
+        // Re-normalize risk score to prevent display overflow
+        if (restoredResult && typeof restoredResult.riskScore === 'number') {
+          restoredResult.riskScore = Math.round(restoredResult.riskScore * 10) / 10
         }
+        setResult(restoredResult)
+        setOverlays(Array.isArray(snap.overlays) ? snap.overlays : generateOverlays(restoredResult))
       }
-    } catch {
+    } catch (e) {
       // noop
     }
   }, [])
@@ -341,7 +344,10 @@ export default function LiveScannerPage() {
 
   const formatStat = (v: any) => {
     if (typeof v === 'number') {
-      return Number.isFinite(v) ? (Math.round(v) === v ? String(v) : v.toFixed(1)) : String(v)
+      if (!Number.isFinite(v)) return String(v)
+      // Always normalize to 1 decimal place max to prevent overflow
+      const rounded = Math.round(v * 10) / 10
+      return String(rounded)
     }
     return String(v ?? '')
   }
@@ -538,10 +544,10 @@ export default function LiveScannerPage() {
                   ].map(item => {
                     const display = formatStat(item.value)
                     return (
-                      <div key={item.label} className="min-w-0 w-full rounded-xl bg-black/30 p-2 text-center">
+                      <div key={item.label} className="min-w-0 rounded-xl bg-black/30 p-2 text-center overflow-hidden">
                         <p className="text-xs text-slate-400 truncate">{item.label}</p>
-                        <p className={`text-base font-bold line-clamp-1 ${item.color}`}>{display}</p>
-                        {item.suffix && <p className="text-xs text-slate-500">{item.suffix}</p>}
+                        <p className={`text-base font-bold ${item.color}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{display}</p>
+                        {item.suffix && <p className="text-xs text-slate-500 truncate">{item.suffix}</p>}
                       </div>
                     )
                   })}
