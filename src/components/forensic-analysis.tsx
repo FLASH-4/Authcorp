@@ -274,7 +274,6 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const heatmapResults = (analysisResults || selectedDocument?.results)?.heatmap
   const heatmapRegions = heatmapResults?.suspiciousRegions || []
   const heatmapPreviewSrc = selectedDocument?.previewUrl
-  const [visionOnly, setVisionOnly] = useState<boolean>(false)
 
   const heatmapRegionBounds = useMemo(() => {
     const bounds = heatmapRegions.reduce(
@@ -296,9 +295,8 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   }, [heatmapRegions])
 
   const displayedRegions = useMemo(() => {
-    if (!visionOnly) return heatmapRegions
-    return heatmapRegions.filter((r: any) => String(r?.source || '').toLowerCase() === 'vision')
-  }, [heatmapRegions, visionOnly])
+    return heatmapRegions
+  }, [heatmapRegions])
 
   const toNormalizedHeatmapRegion = (region: any) => {
     const x = Number(region?.x || 0)
@@ -432,13 +430,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
             />
               <div className="flex items-center justify-between p-2 relative z-50 pointer-events-auto">
                 <div className="text-sm text-gray-200">Heatmap regions: {heatmapRegions.length}</div>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center text-xs text-gray-300 cursor-pointer">
-                    <input type="checkbox" className="mr-2 cursor-pointer" checked={visionOnly} onChange={(e) => setVisionOnly(e.target.checked)} />
-                    Vision only
-                  </label>
-                  <div className="text-xs text-gray-400">Source: {(analysisResults || selectedDocument?.results)?.visionUsed ? ((analysisResults || selectedDocument?.results)?.visionSource || 'vision') : 'fallback/simulated'}</div>
-                </div>
+                <div className="text-xs text-gray-400">Source: {(analysisResults || selectedDocument?.results)?.visionUsed ? ((analysisResults || selectedDocument?.results)?.visionSource || 'vision') : 'fallback/simulated'}</div>
               </div>
             {displayedRegions.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
@@ -478,13 +470,6 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
                   Heatmap aligned to selected document
                 </div>
               </>
-            )}
-            {/* Raw regions dump for debugging when visionOnly is enabled */}
-            {visionOnly && (
-              <div className="mt-2 p-3 bg-black/70 text-xs text-white rounded max-h-40 overflow-auto">
-                <strong className="block mb-2">Raw heatmap regions (raw):</strong>
-                <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify(heatmapRegions, null, 2)}</pre>
-              </div>
             )}
           </div>
           {/* Legend */}

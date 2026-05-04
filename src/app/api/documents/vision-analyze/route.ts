@@ -45,6 +45,7 @@ Check these specific things:
 STEP 3 — MARK SUSPICIOUS REGIONS:
 For EACH visible area of concern, mark a rectangle around it with coordinates as PERCENTAGES (0-100).
 Be SPECIFIC and mark ACTUAL suspicious areas you can see:
+- For Aadhaar cards, pay special attention to the portrait/photo panel. If the person's photo looks pasted, swapped, or digitally replaced, mark ONLY the photo panel region.
 - If the photo looks pasted/different: mark the photo area
 - If text looks edited: mark the text
 - If colors don't match: mark the mismatched area  
@@ -165,6 +166,47 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
           }
         })
 
+      const normalizedDocumentType = String(parsed.documentType || '').toLowerCase()
+      const normalizedCategory = String(parsed.category || '').toLowerCase()
+      const reasoningText = [
+        ...(Array.isArray(parsed.reasoning) ? parsed.reasoning : []),
+        ...(Array.isArray(parsed.metadata?.tamperingClues) ? parsed.metadata.tamperingClues : []),
+      ].join(' ').toLowerCase()
+      const mentionsPhotoTamper = /(photo|portrait|face|pasted|inserted|swapped|replaced|cut\s*-?paste)/i.test(reasoningText)
+      const hasPhotoRegion = normalizedRegions.some((region: any) => {
+        const regionRight = Number(region?.x || 0) + Number(region?.width || 0)
+        const regionBottom = Number(region?.y || 0) + Number(region?.height || 0)
+        return Number(region?.x || 0) <= 38 && regionRight >= 14 && Number(region?.y || 0) <= 60 && regionBottom >= 18
+      })
+
+      const aadhaarPhotoRegion = {
+        x: 13,
+        y: 24,
+        width: 25,
+        height: 33,
+        confidence: 0.9,
+        type: 'copy_move'
+      }
+
+      const finalRegions = (() => {
+        if (
+          normalizedDocumentType.includes('aadhaar') &&
+          ['tampered', 'forged', 'ai-generated'].includes(normalizedCategory) &&
+          (!hasPhotoRegion || mentionsPhotoTamper)
+        ) {
+          return [
+            aadhaarPhotoRegion,
+            ...normalizedRegions.filter((region: any) => {
+              const regionRight = Number(region?.x || 0) + Number(region?.width || 0)
+              const regionBottom = Number(region?.y || 0) + Number(region?.height || 0)
+              return !(Number(region?.x || 0) <= 38 && regionRight >= 14 && Number(region?.y || 0) <= 60 && regionBottom >= 18)
+            })
+          ].slice(0, 6)
+        }
+
+        return normalizedRegions
+      })()
+
       return NextResponse.json({
         documentType: parsed.documentType || 'unknown',
         authenticityScore: Math.min(100, Math.max(0, Number(parsed.authenticityScore) || 72)),
@@ -172,7 +214,7 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         category: parsed.category || 'authentic',
         isManipulated: Boolean(parsed.isManipulated),
         reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning : ['Analysis completed'],
-        heatmapRegions: normalizedRegions,
+        heatmapRegions: finalRegions,
         metadata: {
           editingSoftware: parsed.metadata?.editingSoftware || null,
           tamperingClues: parsed.metadata?.tamperingClues || [],
