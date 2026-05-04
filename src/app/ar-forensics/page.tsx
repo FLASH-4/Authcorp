@@ -107,6 +107,24 @@ export default function LiveScannerPage() {
     setCapturedFrame(null)
   }
 
+  // Generate AR overlay boxes from result
+  const generateOverlays = (r: ScanResult): OverlayBox[] => {
+    const score = r.authenticity.score
+    const boxes: OverlayBox[] = []
+    if (score > 70) {
+      boxes.push({ id: 'doc', label: 'Document Detected', x: 15, y: 10, w: 70, h: 78, color: 'green' })
+      boxes.push({ id: 'auth', label: `Authentic ${Math.round(score)}%`, x: 20, y: 15, w: 32, h: 10, color: 'green' })
+    } else if (score > 40) {
+      boxes.push({ id: 'doc', label: 'Document Detected', x: 15, y: 10, w: 70, h: 78, color: 'amber' })
+      boxes.push({ id: 'warn', label: 'Suspicious Region', x: 25, y: 38, w: 40, h: 18, color: 'amber' })
+    } else {
+      boxes.push({ id: 'doc', label: 'Document Detected', x: 15, y: 10, w: 70, h: 78, color: 'red' })
+      boxes.push({ id: 'flag', label: 'Manipulation Detected', x: 20, y: 28, w: 50, h: 22, color: 'red' })
+      boxes.push({ id: 'meta', label: 'Metadata Anomaly', x: 55, y: 58, w: 28, h: 14, color: 'red' })
+    }
+    return boxes
+  }
+
   // Capture frame from live video
   const captureFrame = (): Promise<{ blob: Blob; dataUrl: string }> => {
     return new Promise((resolve, reject) => {
@@ -126,24 +144,6 @@ export default function LiveScannerPage() {
     })
   }
 
-  // Generate AR overlay boxes from result
-  const generateOverlays = (r: ScanResult): OverlayBox[] => {
-    const score = r.authenticity.score
-    const boxes: OverlayBox[] = []
-    if (score > 70) {
-      boxes.push({ id: 'doc', label: 'Document Detected', x: 15, y: 10, w: 70, h: 78, color: 'green' })
-      boxes.push({ id: 'auth', label: `Authentic ${Math.round(score)}%`, x: 20, y: 15, w: 32, h: 10, color: 'green' })
-    } else if (score > 40) {
-      boxes.push({ id: 'doc', label: 'Document Detected', x: 15, y: 10, w: 70, h: 78, color: 'amber' })
-      boxes.push({ id: 'warn', label: 'Suspicious Region', x: 25, y: 38, w: 40, h: 18, color: 'amber' })
-    } else {
-      boxes.push({ id: 'doc', label: 'Document Detected', x: 15, y: 10, w: 70, h: 78, color: 'red' })
-      boxes.push({ id: 'flag', label: 'Manipulation Detected', x: 20, y: 28, w: 50, h: 22, color: 'red' })
-      boxes.push({ id: 'meta', label: 'Metadata Anomaly', x: 55, y: 58, w: 28, h: 14, color: 'red' })
-    }
-    return boxes
-  }
-
   // Main scan function
   const scanDocument = async () => {
     if (!cameraOn || scanning) return
@@ -160,7 +160,7 @@ export default function LiveScannerPage() {
 
       const file = new File([blob], `live-scan-${Date.now()}.jpg`, { type: 'image/jpeg' })
       const docId = await uploadDocument(file)
-      const analysisResult = await analyzeDocument(docId) as any
+      const analysisResult = (await analyzeDocument(docId)) as any
 
       const auth = analysisResult?.results?.authenticity || {}
       const risk = analysisResult?.results?.riskIntelligence || {}
@@ -186,6 +186,20 @@ export default function LiveScannerPage() {
       setResult(scanResult)
       setOverlays(generateOverlays(scanResult))
       setScanCount(c => c + 1)
+
+      // Persist last scan to sessionStorage so we can restore when navigating back
+      try {
+        const snapshot = {
+          timestamp: Date.now(),
+          previewUrl: dataUrl,
+          result: scanResult,
+          overlays: generateOverlays(scanResult),
+          docId: docId,
+        }
+        sessionStorage.setItem('ar:lastScan', JSON.stringify(snapshot))
+      } catch (e) {
+        // ignore
+      }
 
       const msg = scanResult.verdict === 'authentic'
         ? '✅ Document appears authentic'
@@ -282,6 +296,13 @@ export default function LiveScannerPage() {
     green: { border: 'border-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-900/80' },
     amber: { border: 'border-amber-400', text: 'text-amber-300', bg: 'bg-amber-900/80' },
     red:   { border: 'border-red-400',   text: 'text-red-300',   bg: 'bg-red-900/80'   },
+  }
+
+  const formatStat = (v: any) => {
+    if (typeof v === 'number') {
+      return Number.isFinite(v) ? (Math.round(v) === v ? String(v) : v.toFixed(1)) : String(v)
+    }
+    return String(v ?? '')
   }
 
   return (
@@ -473,13 +494,16 @@ export default function LiveScannerPage() {
                     { label: 'Confidence', value: `${Math.round(result.authenticity.confidence)}%`, suffix: '', color: 'text-cyan-400' },
                     { label: 'Risk Score', value: result.riskScore, suffix: '/ 100', color: result.riskLevel === 'low' ? 'text-emerald-400' : result.riskLevel === 'medium' ? 'text-amber-400' : 'text-red-400' },
                     { label: 'Risk Level', value: result.riskLevel, suffix: '', color: result.riskLevel === 'low' ? 'text-emerald-400' : result.riskLevel === 'medium' ? 'text-amber-400' : 'text-red-400' },
-                  ].map(item => (
-                    <div key={item.label} className="rounded-xl bg-black/30 p-3 text-center">
-                      <p className="text-xs text-slate-400 mb-1">{item.label}</p>
-                      <p className={`text-2xl font-bold capitalize ${item.color}`}>{item.value}</p>
-                      {item.suffix && <p className="text-xs text-slate-500">{item.suffix}</p>}
-                    </div>
-                  ))}
+                  ].map(item => {
+                    const display = formatStat(item.value)
+                    return (
+                      <div key={item.label} className="rounded-xl bg-black/30 p-3 text-center">
+                        <p className="text-xs text-slate-400 mb-1">{item.label}</p>
+                        <p className={`text-2xl font-bold capitalize ${item.color} truncate`}>{display}</p>
+                        {item.suffix && <p className="text-xs text-slate-500">{item.suffix}</p>}
+                      </div>
+                    )
+                  })}
                 </div>
 
                 <div className="mb-4">
