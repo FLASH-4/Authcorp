@@ -274,6 +274,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
   const heatmapResults = (analysisResults || selectedDocument?.results)?.heatmap
   const heatmapRegions = heatmapResults?.suspiciousRegions || []
   const heatmapPreviewSrc = selectedDocument?.previewUrl
+  const [visionOnly, setVisionOnly] = useState<boolean>(false)
 
   const heatmapRegionBounds = useMemo(() => {
     const bounds = heatmapRegions.reduce(
@@ -293,6 +294,11 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       height: Math.max(bounds.maxBottom, 560),
     }
   }, [heatmapRegions])
+
+  const displayedRegions = useMemo(() => {
+    if (!visionOnly) return heatmapRegions
+    return heatmapRegions.filter((r: any) => String(r?.source || '').toLowerCase() === 'vision')
+  }, [heatmapRegions, visionOnly])
 
   const toNormalizedHeatmapRegion = (region: any) => {
     const x = Number(region?.x || 0)
@@ -424,7 +430,17 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
             <div className="absolute inset-0 opacity-20"
               style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '40px 40px' }}
             />
-            {regions.length === 0 ? (
+            <div className="flex items-center justify-between p-2">
+              <div className="text-sm text-gray-200">Heatmap regions: {heatmapRegions.length}</div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center text-xs text-gray-300">
+                  <input type="checkbox" className="mr-2" checked={visionOnly} onChange={(e) => setVisionOnly(e.target.checked)} />
+                  Vision only
+                </label>
+                <div className="text-xs text-gray-400">Source: {(analysisResults || selectedDocument?.results)?.visionUsed ? ((analysisResults || selectedDocument?.results)?.visionSource || 'vision') : 'fallback/simulated'}</div>
+              </div>
+            </div>
+            {displayedRegions.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-6xl mb-4">✅</div>
@@ -434,7 +450,7 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
               </div>
             ) : (
               <>
-                {regions.map((region: any, idx: number) => (
+                {displayedRegions.map((region: any, idx: number) => (
                   (() => {
                     const normalized = toNormalizedHeatmapRegion(region)
                     const plane = imagePlane || { x: 0, y: 0, width: 0, height: 0 }
@@ -449,14 +465,14 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
                     }}
                   >
                     <span className="absolute -top-6 left-0 text-xs text-white bg-black/70 px-1.5 py-0.5 rounded whitespace-nowrap">
-                      {(region.type || 'anomaly').replace(/_/g, ' ')} — {Math.round(region.confidence * 100)}%
+                      {(region.type || 'anomaly').replace(/_/g, ' ')} — {Math.round((region.confidence || 0) * 100)}% ({region.source || 'unknown'})
                     </span>
                   </div>
                     )
                   })()
                 ))}
                 <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-black/60 px-2 py-1 rounded">
-                  {regions.length} suspicious region{regions.length !== 1 ? 's' : ''} flagged
+                  {displayedRegions.length} suspicious region{displayedRegions.length !== 1 ? 's' : ''} flagged
                 </div>
                 <div className="absolute bottom-3 left-3 text-xs text-gray-400 bg-black/60 px-2 py-1 rounded">
                   Heatmap aligned to selected document

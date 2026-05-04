@@ -593,6 +593,9 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         simulatedManipulationRegions.some((r: any) => ['copy_move', 'text_modification'].includes(r.type) && Number(r.x) <= photoAreaThreshold)
       )
 
+      // Attach vision source flags to regions so UI can show raw vision regions vs fallback/simulated
+      const sourceTag = visionResult ? 'vision' : (isManipulated || sessionComparisonSuspect) ? 'simulated' : 'fallback'
+
       const mockResults: any = {
         authenticity: {
           score: adjustedAuthScore,
@@ -673,25 +676,26 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           }
         },
         heatmap: {
-          // Show vision-detected regions if available
-          // For suspicious documents (forged/tampered/ai-generated) WITHOUT vision regions, use fallback
-          // For authentic documents, show no regions unless vision provided them
+          // Show vision-detected regions if available; tag each region with its source
           suspiciousRegions: (() => {
             if (visionResult?.heatmapRegions && visionResult.heatmapRegions.length > 0) {
-              return visionResult.heatmapRegions
+              return visionResult.heatmapRegions.slice(0, 6).map((r: any) => ({ ...r, source: 'vision' }))
             }
-            // No vision regions — fallback only for suspicious documents
+
             if (visionResult && ['ai-generated', 'tampered', 'forged'].includes(normalizedVisionCategory)) {
-              return fallbackHeatmapRegions
+              return fallbackHeatmapRegions.map((r: any) => ({ ...r, source: 'fallback' }))
             }
-            // Mock regions for local manipulation (no vision available)
+
             if (!visionResult && (isManipulated || sessionComparisonSuspect)) {
-              return simulatedManipulationRegions
+              return simulatedManipulationRegions.map((r: any) => ({ ...r, source: 'simulated' }))
             }
-            // Authentic documents show no regions
+
             return []
           })(),
         },
+        // Keep flags about vision usage for debugging/UI
+        visionUsed: Boolean(visionResult),
+        visionSource: visionResult?.source || null,
         riskIntelligence: {
           personRiskScore: (isManipulated || sessionComparisonSuspect) ? 65 + Math.random() * 30 : 5 + Math.random() * 20,
           riskCategory: (isManipulated || sessionComparisonSuspect) ? 'high' : isSuspicious ? 'medium' : 'low',
