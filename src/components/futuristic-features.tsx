@@ -191,19 +191,39 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
   useEffect(() => {
     if (typeof document === 'undefined') return
     
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       const video = liveVideoRef.current
-      if (!video) return
+      if (!video || !camOn) return
       
       if (document.hidden) {
         // Tab became inactive - pause video but keep stream alive
         video.pause()
       } else {
-        // Tab became active again - resume video if camera is on
-        if (camOn && video.srcObject) {
+        // Tab became active again - check if stream is still alive, restart if needed
+        if (liveStreamRef.current && video.srcObject === liveStreamRef.current) {
+          // Stream is still connected, just resume playback
           video.play().catch((err) => {
-            console.error('Failed to resume video:', err)
+            console.error('Failed to resume video playback:', err)
           })
+        } else if (camOn) {
+          // Stream was killed, restart the camera
+          console.log('Stream was suspended, restarting camera...')
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: false,
+            })
+            liveStreamRef.current = stream
+            if (video) {
+              video.srcObject = stream
+              video.play().catch((err) => {
+                console.error('Failed to play resumed video:', err)
+              })
+            }
+          } catch (err) {
+            console.error('Failed to restart camera on tab activation:', err)
+            setCamError('Camera was suspended. Click Start Camera to restart.')
+          }
         }
       }
     }

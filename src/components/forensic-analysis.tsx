@@ -106,8 +106,19 @@ export function ForensicAnalysis({ data }: ForensicAnalysisProps) {
       const regions = results?.heatmap?.suspiciousRegions || []
       const hasPortraitRegion = regions.some((r: any) => r.type === 'copy_move' && r.y > 20 && r.y < 40 && r.x < 30)
       const textHasAadhaar = results?.forensics?.metadataAnalysis?.tamperingClues?.some?.((c: string) => c?.toLowerCase?.().includes('aadhaar'))
+      const textHasDrivingLicense = results?.forensics?.metadataAnalysis?.tamperingClues?.some?.((c: string) => 
+        c?.toLowerCase?.().includes('driving') || 
+        c?.toLowerCase?.().includes('vehicle class') ||
+        c?.toLowerCase?.().includes('transport') ||
+        c?.toLowerCase?.().includes('license number') ||
+        c?.toLowerCase?.().includes('dl number')
+      )
+      
       if (hasPortraitRegion || textHasAadhaar) {
         inferredDocType = 'aadhar_card'
+        isInferredType = true
+      } else if (textHasDrivingLicense) {
+        inferredDocType = 'driving_license'
         isInferredType = true
       } else {
         inferredDocType = 'unknown'

@@ -174,6 +174,18 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         parsed.documentType = 'aadhaar_card'
       }
       
+      // Check if it's a driving license being misclassified as passport
+      if (parsed.documentType === 'passport' &&
+          (parsed.extractedText?.toLowerCase().includes('driving') ||
+           parsed.extractedText?.toLowerCase().includes('vehicle class') ||
+           parsed.extractedText?.toLowerCase().includes('transport') ||
+           parsed.extractedText?.toLowerCase().includes('license number') ||
+           parsed.extractedText?.toLowerCase().includes('dl number') ||
+           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('driving') || r?.toLowerCase().includes('vehicle class') || r?.toLowerCase().includes('transport authority')))) {
+        console.log('Correcting passport → driving_license based on extracted content')
+        parsed.documentType = 'driving_license'
+      }
+      
       // Also check if reasoning strongly suggests Aadhaar features
       if (parsed.documentType === 'passport' && parsed.reasoning) {
         const reasoning = parsed.reasoning.join(' ').toLowerCase()
@@ -183,12 +195,22 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         }
       }
 
-      // Final comprehensive check: combine all text and check for Aadhaar markers
+      // Final comprehensive check: combine all text and check for Aadhaar/Driving License markers
       const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
       if (parsed.documentType === 'passport' && 
           (allText.includes('aadhar') || allText.includes('uidai') || (allText.includes('government of india') && !allText.includes('mrz')))) {
         console.log('Correcting passport → aadhaar_card (final comprehensive check)')
         parsed.documentType = 'aadhaar_card'
+      }
+      
+      // Final check for driving license
+      if (parsed.documentType === 'passport' &&
+          (allText.includes('driving license') || allText.includes('driving licence') || 
+           (allText.includes('vehicle') && allText.includes('class')) ||
+           (allText.includes('transport') && allText.includes('authority')) ||
+           allText.includes('dl number'))) {
+        console.log('Correcting passport → driving_license (final comprehensive check)')
+        parsed.documentType = 'driving_license'
       }
 
       // Ensure all heatmap regions are in 0-100 percentage format
