@@ -12,7 +12,7 @@ import BlockchainAnchoringPage from '@/app/blockchain/page'
 import AIAssistantPage from '@/app/ai-assistant/page'
 import { Navigation } from '@/components/navigation'
 import { Header } from '@/components/header'
-import { useRealTimeStats, useSystemHealth, type RealTimeStats, type SystemHealth } from '@/lib/data-service'
+import { dataService, type RealTimeStats, type SystemHealth } from '@/lib/data-service'
 import { 
   DocumentTextIcon, 
   ShieldCheckIcon, 
@@ -46,20 +46,56 @@ export default function Home() {
   useEffect(() => {
     let mounted = true
 
-    useRealTimeStats().then((stats) => {
+    const loadLiveData = async () => {
+      try {
+        const [stats, health] = await Promise.all([
+          dataService.getRealTimeStats(),
+          dataService.getSystemHealth(),
+        ])
+
+        if (!mounted) {
+          return
+        }
+
+        setLiveStats({ ...stats })
+        setLiveHealth({ ...health })
+      } catch (error) {
+        console.error('Error loading live dashboard data:', error)
+      }
+    }
+
+    loadLiveData()
+
+    const unsubscribeStats = dataService.subscribe('stats_updated', (stats) => {
       if (mounted) {
-        setLiveStats(stats)
+        setLiveStats({ ...stats })
       }
     })
 
-    useSystemHealth().then((health) => {
+    const unsubscribeHealth = dataService.subscribe('health_updated', (health) => {
       if (mounted) {
-        setLiveHealth(health)
+        setLiveHealth({ ...health })
       }
     })
+
+    const handleRefresh = () => {
+      loadLiveData()
+    }
+
+    window.addEventListener('document-uploaded', handleRefresh)
+    window.addEventListener('analysis-completed', handleRefresh)
+    window.addEventListener('risk-check-completed', handleRefresh)
+
+    const pollInterval = window.setInterval(loadLiveData, 1000)
 
     return () => {
       mounted = false
+      unsubscribeStats()
+      unsubscribeHealth()
+      window.removeEventListener('document-uploaded', handleRefresh)
+      window.removeEventListener('analysis-completed', handleRefresh)
+      window.removeEventListener('risk-check-completed', handleRefresh)
+      window.clearInterval(pollInterval)
     }
   }, [])
 
