@@ -255,7 +255,7 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
       try {
         sessionStorage.setItem('ar:lastScan', JSON.stringify({
           timestamp: Date.now(),
-          capturedFrame,
+          capturedFrame: dataUrl,
           result,
         }))
       } catch (e) {

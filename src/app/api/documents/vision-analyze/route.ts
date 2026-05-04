@@ -19,16 +19,31 @@ export async function POST(req: NextRequest) {
     const prompt = `You are a forensic document examiner AI with expertise in detecting forged, tampered, and AI-generated documents.
 
 STEP 1 — IDENTIFY THE DOCUMENT TYPE:
-Look carefully at the image. Identify what it is:
-- "aadhaar_card" — Indian government ID with 12-digit number, UIDAI logo, QR code, hologram pattern
+Look carefully at the image. Identify what it is by these EXACT markers:
+- "aadhaar_card" — INDIAN IDENTITY CARD with:
+  * 12-digit number in format XXXX XXXX XXXX
+  * UIDAI (Unique Identification Authority of India) logo/text
+  * Blue/saffron/green color scheme (Indian tricolor colors)
+  * "Government of India" text in Hindi/English
+  * Hologram pattern or security features specific to Aadhaar
+  * Person's photo in a dedicated panel (usually upper-left)
+  * NO MRZ lines (those are for passports)
+  * Issued by UIDAI, NOT a travel document
+- "passport" — TRAVEL DOCUMENT with:
+  * Machine Readable Zone (MRZ) with 2 lines of text at BOTTOM
+  * "PASSPORT" word clearly visible
+  * Country name at top
+  * Different from Aadhaar - completely different layout and purpose
+  * NOT blue with UIDAI logo
 - "pan_card" — Indian tax card with 10-char alphanumeric PAN, Income Tax India text
-- "passport" — travel document with MRZ lines at bottom, country name, photo
 - "driving_license" — driving licence with vehicle classes, transport authority
 - "resume" — CV/resume with work experience, education sections, skills
 - "certificate" — academic or professional certificate
 - "bank_document" — bank statement, cheque
 - "photo" — just a selfie or photo of a person, NOT a document
 - "unknown" — anything else
+
+CRITICAL: If you see UIDAI logo, 12-digit number, or "Government of India" with Aadhaar format, classify as "aadhaar_card" NEVER as passport. Passports have MRZ lines which Aadhaar does NOT have.
 
 STEP 2 — EXAMINE FOR FORGERY:
 Check these specific things:
@@ -138,6 +153,15 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
     try {
       const clean = text.replace(/```json\n?|\n?```/g, '').trim()
       const parsed = JSON.parse(clean)
+
+      // Safety check: if Vision API says passport but text mentions Aadhaar/UIDAI, correct it
+      if (parsed.documentType === 'passport' && 
+          (parsed.extractedText?.toLowerCase().includes('aadhaar') || 
+           parsed.extractedText?.toLowerCase().includes('uidai') ||
+           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('aadhaar') || r?.toLowerCase().includes('uidai')))) {
+        console.log('Correcting passport → aadhaar_card based on extracted content')
+        parsed.documentType = 'aadhaar_card'
+      }
 
       // Ensure all heatmap regions are in 0-100 percentage format
       const normalizedRegions = (Array.isArray(parsed.heatmapRegions) ? parsed.heatmapRegions : [])
