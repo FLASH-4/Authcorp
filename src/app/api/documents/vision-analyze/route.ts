@@ -264,10 +264,7 @@ function generateHeuristicAnalysis(filename?: string) {
           : 'Document marked as forged pending manual review. Heatmap regions highlight key tampered areas.'
       ],
       heatmapRegions: isAadhaarFilename
-        ? [
-            aadhaarPhotoRegion,
-            { x: 36, y: 42, width: 38, height: 18, confidence: 0.74, type: 'text_modification' }
-          ]
+        ? [aadhaarPhotoRegion]
         : [
             { x: 45, y: 25, width: 35, height: 30, confidence: 0.81, type: 'text_modification' },
             { x: 40, y: 65, width: 40, height: 18, confidence: 0.76, type: 'color_mismatch' }

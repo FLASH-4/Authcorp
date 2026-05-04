@@ -231,9 +231,11 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
                         </h4>
                         <div className="flex items-center space-x-2">
                           <StatusIcon className={`w-4 h-4 ${getStatusColor(document.status)}`} />
-                          <span className={`text-xs font-medium ${getStatusColor(document.status)} ${
-                            document.status === 'blocked' ? 'animate-pulse' : ''
-                          }`}>
+                          <span className={`text-xs font-medium ${
+                            document.status === 'completed' && document.results?.authenticity?.category && document.results.authenticity.category !== 'authentic'
+                              ? 'text-red-600 dark:text-red-400'
+                              : getStatusColor(document.status)
+                          } ${document.status === 'blocked' ? 'animate-pulse' : ''}`}>
                             {getStatusMessage(document.status, document)}
                           </span>
                           {document.status === 'blocked' && (
