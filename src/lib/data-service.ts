@@ -93,7 +93,11 @@ class DataService {
         highRiskFlags: tamperedDocs.length + deepfakeDocs.length,
         avgProcessingTime: this.calculateDynamicProcessingTime(),
         deepfakesDetected: deepfakeDocs.length,
-        faceSwapsDetected: Math.floor(deepfakeDocs.length * 0.3),
+        // Prefer explicit face-swap detection if available in results; otherwise fall back to heuristic
+        faceSwapsDetected: (() => {
+          const faceSwapDocs = completedDocs.filter(doc => Boolean(doc.results?.forensics?.imageForensics?.faceSwapDetected)).length
+          return faceSwapDocs > 0 ? faceSwapDocs : Math.floor(deepfakeDocs.length * 0.3)
+        })(),
         ganGeneratedDetected: Math.floor(deepfakeDocs.length * 0.7),
         accuracyRate: hasCompletedDocuments ? this.calculateDynamicAccuracyRate() : 0,
         systemStatus: await this.getDynamicSystemStatus(),

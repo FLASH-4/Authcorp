@@ -75,6 +75,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
   }
 
   const getStatusColor = (status: string) => {
+    // Use document result category for completed documents to reflect actual verification status
     switch (status) {
       case 'completed':
         return 'text-green-600 dark:text-green-400'
@@ -91,6 +92,7 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
   }
 
   const getStatusIcon = (status: string) => {
+    // For completed status we may want to show different icons based on final category
     switch (status) {
       case 'completed':
         return CheckCircleIcon
@@ -104,9 +106,14 @@ export function DocumentUpload({ onAnalysisComplete }: DocumentUploadProps) {
   }
 
   const getStatusMessage = (status: string, document: any) => {
+    // Show contextual message for completed documents based on authenticity category
     switch (status) {
       case 'completed':
-        return 'Verified Authentic'
+        if (document?.results?.authenticity?.category === 'authentic') return 'Verified Authentic'
+        if (document?.results?.authenticity?.category === 'tampered') return 'Flagged — Tampered'
+        if (document?.results?.authenticity?.category === 'forged') return 'Flagged — Forged'
+        if (document?.results?.authenticity?.category === 'ai-generated') return 'Flagged — AI-generated'
+        return 'Analysis Complete'
       case 'blocked':
         return '🚨 SECURITY THREAT BLOCKED'
       case 'failed':

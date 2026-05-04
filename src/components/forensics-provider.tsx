@@ -584,6 +584,15 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
       const fallbackHeatmapRegions = buildDynamicHeatmapRegions(2)
       const simulatedManipulationRegions = (isManipulated || sessionComparisonSuspect) ? buildDynamicHeatmapRegions(3) : []
 
+      // Heuristic face-swap detection: if any suspicious region is located over the photo area (left side of typical ID layouts),
+      // mark `faceSwapDetected` so dashboard and statistics can reflect it accurately.
+      const visionRegions = visionResult?.heatmapRegions || []
+      const photoAreaThreshold = 35 // percent from left edge where photo commonly resides on many IDs
+      const faceSwapDetected = Boolean(
+        visionRegions.some((r: any) => ['copy_move', 'text_modification'].includes(r.type) && Number(r.x) <= photoAreaThreshold) ||
+        simulatedManipulationRegions.some((r: any) => ['copy_move', 'text_modification'].includes(r.type) && Number(r.x) <= photoAreaThreshold)
+      )
+
       const mockResults: any = {
         authenticity: {
           score: adjustedAuthScore,
@@ -601,7 +610,8 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             errorLevelAnalysis: isManipulated ? 72 + Math.random() * 20 : 8 + Math.random() * 15,
             noiseAnalysis: isManipulated ? 65 + Math.random() * 25 : 5 + Math.random() * 12,
             compressionArtifacts: isManipulated,
-            copyMoveDetection: adjustedAuthScore < 50
+            copyMoveDetection: adjustedAuthScore < 50,
+            faceSwapDetected: faceSwapDetected,
           },
           metadataAnalysis: {
             exifData: visionResult?.metadata ? {
