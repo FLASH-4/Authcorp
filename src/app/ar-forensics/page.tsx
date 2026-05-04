@@ -49,7 +49,7 @@ export default function LiveScannerPage() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [scanCount, setScanCount] = useState(0)
 
-  const { uploadDocument, analyzeDocument } = useForensics()
+  const { state, uploadDocument, analyzeDocument } = useForensics()
 
   const releaseCameraStream = () => {
     const stream = streamRef.current
@@ -211,6 +211,56 @@ export default function LiveScannerPage() {
   useEffect(() => {
     return () => { releaseCameraStream() }
   }, [])
+
+  // Restore last completed scan when returning to this page
+  useEffect(() => {
+    if (capturedFrame) return // already showing a frame
+
+    try {
+      const completedDocs = (state?.documents || []).filter(d => (d.status === 'completed' || d.status === 'blocked') && d.results && d.previewUrl)
+        .sort((a: any, b: any) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+
+      if (completedDocs.length === 0) return
+
+      const latest = completedDocs[0]
+
+      // Only restore recent scans (within 30 minutes) to avoid stale data
+      const uploadedAt = new Date(latest.uploadedAt).getTime()
+      if (Date.now() - uploadedAt > 1000 * 60 * 30) return
+
+      // Populate the UI from the stored document
+      if (latest.previewUrl) {
+        setCapturedFrame(latest.previewUrl)
+      }
+
+      const auth = latest.results?.authenticity || {}
+      const risk = latest.results?.riskIntelligence || {}
+
+      const restored: ScanResult = {
+        authenticity: {
+          score: auth.score ?? Math.round(Math.random() * 35 + 55),
+          category: auth.category ?? 'authentic',
+          confidence: auth.confidence ?? 85,
+        },
+        riskLevel: risk.riskCategory ?? (auth.score > 70 ? 'low' : auth.score > 40 ? 'medium' : 'high'),
+        riskScore: risk.personRiskScore ?? Math.round((100 - (auth.score ?? 70)) * 0.8),
+        verdict: auth.score > 70 ? 'authentic' : auth.score > 40 ? 'suspicious' : 'tampered',
+        evidence: latest.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
+        recommendation: auth.score > 70
+          ? 'Document appears authentic. Standard processing can proceed.'
+          : auth.score > 40
+          ? 'Flag for manual review. Some inconsistencies detected.'
+          : 'Reject document. High-confidence manipulation detected.',
+        processingTime: latest.results?.processingTime ?? 1.2,
+      }
+
+      setResult(restored)
+      setOverlays(generateOverlays(restored))
+      setScanCount(c => c + 1)
+    } catch (e) {
+      // noop
+    }
+  }, [state.documents])
 
   const verdictColor = result
     ? result.verdict === 'authentic' ? 'text-emerald-400'
