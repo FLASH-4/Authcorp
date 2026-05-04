@@ -161,10 +161,29 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
         }
         setScanResult(restoredResult)
       }
-      // Note: Camera state (camOn) is NOT restored - camera session is not persistent
-      // Only the scan results and preview image are persistent
+      // Restore overlay boxes for heatmap visualization
+      if (snap.overlayBoxes && Array.isArray(snap.overlayBoxes)) {
+        setOverlayBoxes(snap.overlayBoxes)
+      }
+      // Restore camera UI state to match previous session
+      if (snap.camOn) {
+        setCamOn(true)
+      }
     } catch (e) {
       // noop
+    }
+  }, [])
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      // Stop camera stream when component unmounts
+      if (liveStreamRef.current) {
+        liveStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => {
+          track.stop()
+        })
+        liveStreamRef.current = null
+      }
     }
   }, [])
 
@@ -182,6 +201,13 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
   const startCam = async () => {
     setCamError(null)
     try {
+      // Stop any existing stream first
+      if (liveStreamRef.current) {
+        liveStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => {
+          track.stop()
+        })
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
@@ -205,10 +231,38 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
   }
 
   const stopCam = () => {
-    liveStreamRef.current?.getTracks().forEach(t => t.stop())
-    liveStreamRef.current = null
-    if (liveVideoRef.current) liveVideoRef.current.srcObject = null
+    try {
+      // Stop all camera tracks
+      if (liveStreamRef.current) {
+        liveStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => {
+          track.stop()
+        })
+        liveStreamRef.current = null
+      }
+      
+      // Clear video element
+      if (liveVideoRef.current) {
+        liveVideoRef.current.pause()
+        liveVideoRef.current.srcObject = null
+      }
+    } catch (err) {
+      console.error('Error stopping camera:', err)
+    }
+    
     setCamOn(false)
+    
+    // Clear sessionStorage camOn flag when stopping camera
+    try {
+      const raw = sessionStorage.getItem('ar:lastScan')
+      if (raw) {
+        const snap = JSON.parse(raw)
+        snap.camOn = false
+        sessionStorage.setItem('ar:lastScan', JSON.stringify(snap))
+      }
+    } catch (e) {
+      // noop
+    }
+    
     setScanResult(null)
     setOverlayBoxes([])
     setCapturedFrame(null)
@@ -253,23 +307,26 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
       }
       setScanResult(result)
 
+      // Generate overlay boxes based on score BEFORE saving to sessionStorage
+      const boxes = score > 70
+        ? [{ id: 'doc', label: `Authentic ${Math.round(score)}%`, x: 15, y: 10, w: 70, h: 78, color: 'emerald' }]
+        : score > 40
+        ? [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'amber' }, { id: 'w', label: 'Suspicious Region', x: 25, y: 38, w: 40, h: 18, color: 'amber' }]
+        : [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'red' }, { id: 'f', label: 'Manipulation Detected', x: 20, y: 28, w: 50, h: 22, color: 'red' }]
+
       // Persist scan result to sessionStorage for cross-navigation persistence
       try {
         sessionStorage.setItem('ar:lastScan', JSON.stringify({
           timestamp: Date.now(),
           capturedFrame: dataUrl,
           result,
+          overlayBoxes: boxes,
           camOn: true,
         }))
       } catch (e) {
         // noop
       }
 
-      const boxes = score > 70
-        ? [{ id: 'doc', label: `Authentic ${Math.round(score)}%`, x: 15, y: 10, w: 70, h: 78, color: 'emerald' }]
-        : score > 40
-        ? [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'amber' }, { id: 'w', label: 'Suspicious Region', x: 25, y: 38, w: 40, h: 18, color: 'amber' }]
-        : [{ id: 'doc', label: 'Document', x: 15, y: 10, w: 70, h: 78, color: 'red' }, { id: 'f', label: 'Manipulation Detected', x: 20, y: 28, w: 50, h: 22, color: 'red' }]
       setOverlayBoxes(boxes)
       setScanCount(c => c + 1)
 
