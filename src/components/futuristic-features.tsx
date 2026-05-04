@@ -145,6 +145,43 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
     typeof window !== 'undefined' ? (window as any).__globalArCameraStream || null : null
   )
 
+  // Detect when AR data is cleared from sessionStorage (e.g., when document is deleted)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const handleStorageChange = (e: StorageEvent) => {
+      // Check if ar:lastScan was removed
+      if (e.key === 'ar:lastScan' && e.newValue === null) {
+        console.log('AR scan data was cleared - document may have been deleted')
+        // Clear all AR state
+        setCapturedFrame(null)
+        setScanResult(null)
+        setOverlayBoxes([])
+        setCamOn(false)
+      }
+    }
+    
+    // Also handle same-window sessionStorage changes via custom event
+    const handleArDataCleared = () => {
+      const raw = sessionStorage.getItem('ar:lastScan')
+      if (!raw) {
+        // Data was cleared
+        setCapturedFrame(null)
+        setScanResult(null)
+        setOverlayBoxes([])
+        setCamOn(false)
+      }
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('ar:dataClearedEvent', handleArDataCleared as EventListener)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('ar:dataClearedEvent', handleArDataCleared as EventListener)
+    }
+  }, [])
+
   // Restore last AR scan from sessionStorage on mount for tab switch persistence
   useEffect(() => {
     try {
@@ -416,6 +453,7 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
           result,
           overlayBoxes: boxes,
           camOn: true,
+          docId, // Store document ID so we can clear AR data if document is deleted
         }))
       } catch (e) {
         // noop

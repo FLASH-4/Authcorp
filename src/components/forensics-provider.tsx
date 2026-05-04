@@ -917,6 +917,30 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
   }
 
   const removeDocument = (id: string) => {
+    // Check if this is the AR scanned document and clear AR data if so
+    try {
+      if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+        const raw = sessionStorage.getItem('ar:lastScan')
+        if (raw) {
+          const snap = JSON.parse(raw)
+          // If the document being removed is the AR scanned document, clear all AR data
+          if (snap && snap.docId === id) {
+            console.log('Removing AR scan data because scanned document was deleted')
+            sessionStorage.removeItem('ar:lastScan')
+            // Also clear global camera stream
+            if (typeof (window as any) !== 'undefined') {
+              (window as any).__globalArCameraStream = null
+            }
+            // Dispatch custom event to notify components
+            window.dispatchEvent(new Event('ar:dataClearedEvent'))
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error clearing AR data:', e)
+      // noop
+    }
+    
     dispatch({ type: 'REMOVE_DOCUMENT', payload: id })
   }
 
