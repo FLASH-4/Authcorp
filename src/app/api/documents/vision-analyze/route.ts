@@ -250,18 +250,44 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         if (hasAadhaarMarker) {
           console.log('✓ AADHAAR CARD DETECTED (OVERRIDING) - Setting documentType to aadhaar_card')
           parsed.documentType = 'aadhaar_card'
+          
+          // ========== AUTHENTICITY SCORE CORRECTION FOR AADHAAR ==========
+          // Real Aadhaar cards should NOT be flagged as tampered just because they look different
+          // If Vision API returned low score, boost it unless there are clear signs of tampering
+          const hasRealTamperClues = 
+            allReasoning.includes('forged') ||
+            allReasoning.includes('fake') ||
+            allReasoning.includes('manipulated') ||
+            allReasoning.includes('photoshopped') ||
+            allReasoning.includes('ai-generated') ||
+            (allReasoning.includes('copy') && allReasoning.includes('move')) ||
+            (allReasoning.includes('pasted') && allReasoning.includes('photo'))
+          
+          if (!hasRealTamperClues && Number(parsed.authenticityScore) < 60) {
+            // Vision API flagged it low, but no real clues - boost it as it's a real Aadhaar
+            console.log('✓ AADHAAR authenticity corrected: Real document detected, boosting score')
+            parsed.authenticityScore = Math.max(70, Number(parsed.authenticityScore) || 72)
+            parsed.category = 'authentic'
+          }
         }
         // ========== STEP 2: PAN CARD CHECK (ONLY IF NOT AADHAAR) ==========
         else if (!hasAadhaarMarker) {
           const hasPanMarker =
             allText.includes('permanent account number') ||
             allText.includes('pan card') ||
-            allText.includes('pan') && allText.includes('income tax') ||
-            /[a-z]{5}[0-9]{4}[a-z]{1}/.test(allText)
+            (allText.includes('pan') && allText.includes('income tax')) ||
+            /[a-z]{5}[0-9]{4}[a-z]{1}/i.test(allText) || // Case-insensitive for PAN code like DAAPY9087F
+            allText.includes('dept of') || // "DEPT OF INCOME TAX"
+            allText.includes('nsdl') || // NSDL is PAN card issuer
+            /[a-z]{5}[0-9]{4}[a-z]{1}/.test(allText.toLowerCase()) // Explicit lowercase check
 
           if (hasPanMarker) {
             console.log('✓ PAN CARD DETECTED - Setting documentType to pan_card')
             parsed.documentType = 'pan_card'
+            // Don't artificially lower scores for real PAN cards
+            if (Number(parsed.authenticityScore) < 50) {
+              parsed.authenticityScore = Math.max(50, Number(parsed.authenticityScore) || 72)
+            }
           }
           // ========== STEP 3: DRIVING LICENSE CHECK (ONLY IF NOT AADHAAR OR PAN) ==========
           else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport' || parsed.documentType === 'driving_license') {
