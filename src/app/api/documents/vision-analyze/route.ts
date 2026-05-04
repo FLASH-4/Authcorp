@@ -234,7 +234,8 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         console.log('✓ AI-GENERATED IMAGE DETECTED - Preserving Vision API ai-generated classification')
         // Don't override the document type - AI-generated is the key finding
       } else {
-        // ========== STEP 1: AADHAAR CARD CHECK (HIGHEST PRIORITY) ==========
+        // ========== STEP 1: AADHAAR CARD CHECK (HIGHEST PRIORITY - OVERRIDE EVERYTHING) ==========
+        // ALWAYS check for Aadhaar markers FIRST, regardless of what Vision API returned
         // If ANY Aadhaar marker exists, it MUST be classified as aadhaar_card
         const hasAadhaarMarker = 
           allText.includes('uidai') ||
@@ -247,44 +248,38 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
           allReasoning.includes('12-digit')
 
         if (hasAadhaarMarker) {
-          console.log('✓ AADHAAR CARD DETECTED - Setting documentType to aadhaar_card')
+          console.log('✓ AADHAAR CARD DETECTED (OVERRIDING) - Setting documentType to aadhaar_card')
           parsed.documentType = 'aadhaar_card'
         }
-
-        // ========== STEP 2: DRIVING LICENSE CHECK (if NOT Aadhaar) ==========
-        // Only check for driving license if we didn't already detect Aadhaar
-        else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
-          const hasDrivingLicenseMarker =
-            allText.includes('driving license') ||
-            allText.includes('driving licence') ||
-            allText.includes('vehicle class') ||
-            (allText.includes('license number') && !allText.includes('uidai')) ||
-            (allText.includes('dl number') && !allText.includes('uidai')) ||
-            (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai')) ||
-            (allText.includes('rto') && !allText.includes('uidai'))
-
-          if (hasDrivingLicenseMarker) {
-            console.log('✓ DRIVING LICENSE DETECTED - Setting documentType to driving_license')
-            parsed.documentType = 'driving_license'
-          }
-        }
-
-        // ========== STEP 3: PAN CARD CHECK (if NOT Aadhaar or Driving License) ==========
-        if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
+        // ========== STEP 2: PAN CARD CHECK (ONLY IF NOT AADHAAR) ==========
+        else if (!hasAadhaarMarker) {
           const hasPanMarker =
             allText.includes('permanent account number') ||
             allText.includes('pan card') ||
-            (allText.includes('pan') && allText.includes('income tax')) ||
+            allText.includes('pan') && allText.includes('income tax') ||
             /[a-z]{5}[0-9]{4}[a-z]{1}/.test(allText)
 
           if (hasPanMarker) {
             console.log('✓ PAN CARD DETECTED - Setting documentType to pan_card')
             parsed.documentType = 'pan_card'
           }
-        }
+          // ========== STEP 3: DRIVING LICENSE CHECK (ONLY IF NOT AADHAAR OR PAN) ==========
+          else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport' || parsed.documentType === 'driving_license') {
+            const hasDrivingLicenseMarker =
+              allText.includes('driving license') ||
+              allText.includes('driving licence') ||
+              allText.includes('vehicle class') ||
+              (allText.includes('license number') && !allText.includes('uidai') && !allText.includes('pan')) ||
+              (allText.includes('dl number') && !allText.includes('uidai') && !allText.includes('pan')) ||
+              (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai') && !allText.includes('pan')) ||
+              (allText.includes('rto') && !allText.includes('uidai') && !allText.includes('pan'))
 
-        // ========== STEP 4: PASSPORT/PHOTO/OTHER CHECKS ==========
-        // No additional corrections needed - Aadhaar and DL already handled in steps 1-2
+            if (hasDrivingLicenseMarker) {
+              console.log('✓ DRIVING LICENSE DETECTED - Setting documentType to driving_license')
+              parsed.documentType = 'driving_license'
+            }
+          }
+        }
       }
 
       // Ensure all heatmap regions are in 0-100 percentage format
