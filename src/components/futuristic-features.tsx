@@ -142,6 +142,30 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
   const liveCanvasRef = useRef<HTMLCanvasElement>(null)
   const liveStreamRef = useRef<MediaStream | null>(null)
 
+  // Restore last AR scan from sessionStorage on mount for tab switch persistence
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return
+      const raw = sessionStorage.getItem('ar:lastScan')
+      if (!raw) return
+      const snap = JSON.parse(raw)
+      if (!snap?.timestamp || Date.now() - snap.timestamp > 1000 * 60 * 30) return
+      
+      // Restore the previous scan
+      if (snap.capturedFrame) setCapturedFrame(snap.capturedFrame)
+      if (snap.result) {
+        const restoredResult = snap.result
+        // Re-normalize risk score to prevent overflow
+        if (restoredResult && typeof restoredResult.riskScore === 'number') {
+          restoredResult.riskScore = Math.round(restoredResult.riskScore * 10) / 10
+        }
+        setScanResult(restoredResult)
+      }
+    } catch (e) {
+      // noop
+    }
+  }, [])
+
   // Attach stream to video element once camera starts
   useEffect(() => {
     if (camOn && liveStreamRef.current && liveVideoRef.current) {
@@ -220,12 +244,23 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
         verdict: score > 70 ? 'Authentic' : score > 40 ? 'Suspicious' : 'Tampered',
         verdictColor: score > 70 ? 'text-emerald-400' : score > 40 ? 'text-amber-400' : 'text-red-400',
         riskLevel: risk.riskCategory ?? (score > 70 ? 'Low' : score > 40 ? 'Medium' : 'High'),
-        riskScore: risk.personRiskScore ?? Math.round((100 - score) * 0.8),
+        riskScore: Math.round((risk.personRiskScore ?? Math.round((100 - score) * 0.8)) * 10) / 10,
         recommendation: score > 70 ? 'Document appears authentic. Proceed.' : score > 40 ? 'Flag for manual review.' : 'Reject — manipulation detected.',
         evidence: raw?.results?.forensics?.metadataAnalysis?.tamperingClues ?? [],
         time: raw?.processingTime ?? 1.4,
       }
       setScanResult(result)
+
+      // Persist scan result to sessionStorage for cross-navigation persistence
+      try {
+        sessionStorage.setItem('ar:lastScan', JSON.stringify({
+          timestamp: Date.now(),
+          capturedFrame,
+          result,
+        }))
+      } catch (e) {
+        // noop
+      }
 
       const boxes = score > 70
         ? [{ id: 'doc', label: `Authentic ${Math.round(score)}%`, x: 15, y: 10, w: 70, h: 78, color: 'emerald' }]
@@ -363,7 +398,7 @@ function ARForensicsPanel({ uploadDocument, analyzeDocument }: { uploadDocument:
                 {[
                   { label: 'Authenticity', val: `${Math.round(scanResult.score)}/100`, color: scanResult.verdictColor },
                   { label: 'Confidence', val: `${Math.round(scanResult.confidence)}%`, color: 'text-cyan-400' },
-                  { label: 'Risk Score', val: `${scanResult.riskScore}/100`, color: 'text-slate-200' },
+                  { label: 'Risk Score', val: `${Math.round(scanResult.riskScore * 10) / 10}/100`, color: 'text-slate-200' },
                   { label: 'Risk Level', val: scanResult.riskLevel, color: 'text-slate-200' },
                 ].map(item => (
                   <div key={item.label} className="rounded-xl bg-black/30 p-3 text-center">
