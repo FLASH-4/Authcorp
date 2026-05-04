@@ -51,10 +51,27 @@ export default function LiveScannerPage() {
 
   const { uploadDocument, analyzeDocument } = useForensics()
 
+  const releaseCameraStream = () => {
+    const stream = streamRef.current
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop())
+    }
+
+    streamRef.current = null
+
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.srcObject = null
+      videoRef.current.removeAttribute('src')
+      videoRef.current.load()
+    }
+  }
+
   // Start camera
   const startCamera = async () => {
     setCameraError(null)
     try {
+      releaseCameraStream()
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'user' },
@@ -83,11 +100,7 @@ export default function LiveScannerPage() {
 
   // Stop camera
   const stopCamera = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
+    releaseCameraStream()
     setCameraOn(false)
     setResult(null)
     setOverlays([])
@@ -196,7 +209,7 @@ export default function LiveScannerPage() {
   }
 
   useEffect(() => {
-    return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
+    return () => { releaseCameraStream() }
   }, [])
 
   const verdictColor = result
