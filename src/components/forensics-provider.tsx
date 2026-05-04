@@ -367,10 +367,11 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         payload: { id: documentId, updates: { progress: 10 } }
       })
       
+      const documentImageData = document.previewUrl || previewUrlMap.current[documentId] || 'mock_image_data'
       let classification = await DocumentClassifier.classifyDocument(
-        'mock_image_data', // In production, use actual image data
+        documentImageData,
         document.filename,
-        'extracted_text' // In production, extract text from document
+        ''
       )
       
       dispatch({

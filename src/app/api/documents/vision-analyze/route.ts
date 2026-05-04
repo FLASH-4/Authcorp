@@ -206,10 +206,12 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
     try {
       const clean = text.replace(/```json\n?|\n?```/g, '').trim()
       const parsed = JSON.parse(clean)
+      const rawResponseText = text.toLowerCase()
 
       // Combine all available text for comprehensive analysis
-      const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
+      const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''} ${rawResponseText}`.toLowerCase()
       const allReasoning = (parsed.reasoning || []).join(' ').toLowerCase()
+      const hasExplicitTamperLanguage = /\b(forged|fake|tampered|manipulated|counterfeit|photoshopped|edited|altered|spliced|inpaint|replaced|cloned|deepfake)\b/i.test(rawResponseText)
 
       // ========== CRITICAL: DETECT PHOTOS BY FILENAME ==========
       // Check if filename indicates this is a photo/portrait, not a document
@@ -242,30 +244,22 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
           allText.includes('aadhaar') ||
           allText.includes('आधार') ||
           /\d{4}\s\d{4}\s\d{4}/.test(allText) || // 12-digit format XXXX XXXX XXXX
+          /\d{12}/.test(allText) ||
           allReasoning.includes('uidai') ||
           allReasoning.includes('aadhaar') ||
           allReasoning.includes('आधार') ||
-          allReasoning.includes('12-digit')
+          allReasoning.includes('12-digit') ||
+          rawResponseText.includes('uidai') ||
+          rawResponseText.includes('aadhaar') ||
+          rawResponseText.includes('आधार') ||
+          /\d{4}\s\d{4}\s\d{4}/.test(rawResponseText)
 
         if (hasAadhaarMarker) {
           console.log('✓ AADHAAR CARD DETECTED (OVERRIDING) - Setting documentType to aadhaar_card')
           parsed.documentType = 'aadhaar_card'
-          
-          // ========== AUTHENTICITY SCORE CORRECTION FOR AADHAAR ==========
-          // Real Aadhaar cards should NOT be flagged as tampered just because they look different
-          const hasRealTamperClues = 
-            allReasoning.includes('forged') ||
-            allReasoning.includes('fake') ||
-            allReasoning.includes('manipulated') ||
-            allReasoning.includes('photoshopped') ||
-            allReasoning.includes('ai-generated') ||
-            allReasoning.includes('deepfake') ||
-            (allReasoning.includes('copy') && allReasoning.includes('move')) ||
-            (allReasoning.includes('pasted') && allReasoning.includes('photo')) ||
-            (allReasoning.includes('morphed') && allReasoning.includes('photo'))
-          
-          // ALWAYS set to authentic for real Aadhaar unless proven tampered
-          if (!hasRealTamperClues) {
+
+          // Real Aadhaar cards should not stay flagged tampered unless the model is explicit
+          if (!hasExplicitTamperLanguage) {
             console.log('✓ AADHAAR is REAL - Setting to authentic, boosting score to 75+')
             parsed.category = 'authentic'
             parsed.isManipulated = false
@@ -280,7 +274,7 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         // ========== STEP 2: PAN CARD CHECK (ONLY IF NOT AADHAAR) ==========
         else if (!hasAadhaarMarker) {
           // FIRST: Check for PAN code - this is definitive
-          const hasPanCodePattern = /[a-z]{5}[0-9]{4}[a-z]/i.test(allText) // DAAPY9087F format (case insensitive)
+          const hasPanCodePattern = /[a-z]{5}[0-9]{4}[a-z]/i.test(allText) || /[a-z]{5}[0-9]{4}[a-z]/i.test(rawResponseText) // DAAPY9087F format (case insensitive)
           
           // SECOND: Check other PAN markers
           const hasPermanentAccountNumber = allText.toLowerCase().includes('permanent account number')
@@ -308,12 +302,16 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
           else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport' || parsed.documentType === 'driving_license') {
             // FIRST: Check if this might actually be a PAN that Vision API misclassified as DL
             // If we find clear PAN markers, it's PAN, not DL
-            if (parsed.documentType === 'driving_license' && allText.toLowerCase().includes('income tax')) {
+            if (parsed.documentType === 'driving_license' && (allText.toLowerCase().includes('income tax') || rawResponseText.includes('income tax'))) {
               // Likely a PAN misclassified as DL - check for PAN code again
               if (/[a-z]{5}[0-9]{4}[a-z]/i.test(allText) || 
+                  /[a-z]{5}[0-9]{4}[a-z]/i.test(rawResponseText) ||
                   allText.toLowerCase().includes('permanent account') ||
+                  rawResponseText.includes('permanent account') ||
                   allText.toLowerCase().includes('nsdl') ||
-                  (allText.toLowerCase().includes('pan') && allText.toLowerCase().includes('income'))) {
+                  rawResponseText.includes('nsdl') ||
+                  (allText.toLowerCase().includes('pan') && allText.toLowerCase().includes('income')) ||
+                  (rawResponseText.includes('pan') && rawResponseText.includes('income'))) {
                 console.log('✓ DETECTED PAN CARD MISCLASSIFIED AS DL - Correcting to pan_card')
                 parsed.documentType = 'pan_card'
                 parsed.authenticityScore = Math.max(65, Number(parsed.authenticityScore) || 65)

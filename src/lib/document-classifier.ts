@@ -94,6 +94,14 @@ export class DocumentClassifier {
       expectedFields: ['dl_number', 'name', 'dob', 'address', 'vehicle_class', 'issue_date', 'expiry_date'],
       verificationRules: []
     },
+    pan_card: {
+      keywords: ['pan', 'permanent account number', 'income tax', 'nsdl', 'govt of india'],
+      patterns: [/[A-Z]{5}\d{4}[A-Z]{1}/, /[a-z]{5}[0-9]{4}[a-z]/i],
+      features: ['hasQRCode', 'hasWatermark'],
+      layout: 'card',
+      expectedFields: ['pan_number', 'name', 'father_name', 'dob'],
+      verificationRules: []
+    },
     presentation: {
       keywords: ['powerpoint', 'presentation', 'slide', 'ppt', 'pptx'],
       patterns: [],
@@ -159,17 +167,29 @@ export class DocumentClassifier {
   }
 
   private static async extractDocumentFeatures(imageData: string | ArrayBuffer): Promise<DocumentFeatures> {
-    // Simulate feature extraction from image analysis
+    // Deterministic feature extraction fallback so repeated scans do not flip results
+    const source = typeof imageData === 'string'
+      ? imageData
+      : Array.from(new Uint8Array(imageData)).slice(0, 256).map((value) => String.fromCharCode(value)).join('')
+
+    let hash = 2166136261
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
+
+    const pick = (shift: number) => ((hash >>> shift) & 255) / 255
+
     return {
-      hasPhoto: Math.random() > 0.5,
-      hasSignature: Math.random() > 0.6,
-      hasBarcode: Math.random() > 0.7,
-      hasQRCode: Math.random() > 0.8,
-      hasWatermark: Math.random() > 0.6,
-      hasOfficialSeal: Math.random() > 0.7,
-      textDensity: Math.random(),
-      colorScheme: ['government', 'corporate', 'personal', 'presentation'][Math.floor(Math.random() * 4)] as any,
-      layout: ['card', 'document', 'certificate', 'presentation'][Math.floor(Math.random() * 4)] as any,
+      hasPhoto: pick(0) > 0.45,
+      hasSignature: pick(8) > 0.55,
+      hasBarcode: pick(16) > 0.65,
+      hasQRCode: pick(24) > 0.7,
+      hasWatermark: pick(32) > 0.6,
+      hasOfficialSeal: pick(40) > 0.7,
+      textDensity: pick(48),
+      colorScheme: ['government', 'corporate', 'personal', 'presentation'][Math.floor(pick(56) * 4)] as any,
+      layout: ['card', 'document', 'certificate', 'presentation'][Math.floor(pick(64) * 4)] as any,
       language: ['english', 'hindi']
     }
   }
@@ -202,6 +222,59 @@ export class DocumentClassifier {
     features: DocumentFeatures,
     textAnalysis: { keywords: string[], patterns: RegExp[] }
   ): DocumentClassification {
+    const lowerKeywords = textAnalysis.keywords.map(keyword => keyword.toLowerCase())
+
+    const hasAadhaarSignal =
+      lowerKeywords.includes('aadhaar') ||
+      lowerKeywords.includes('aadhar') ||
+      lowerKeywords.includes('uidai') ||
+      lowerKeywords.includes('unique identification') ||
+      textAnalysis.patterns.some(pattern => pattern.source === '\\d{4}\\s\\d{4}\\s\\d{4}' || pattern.source === '\\d{12}')
+
+    if (hasAadhaarSignal) {
+      return {
+        type: 'aadhar_card',
+        confidence: 0.95,
+        expectedFields: this.documentPatterns.aadhar_card.expectedFields,
+        verificationRules: this.documentPatterns.aadhar_card.verificationRules,
+        riskFactors: this.getRiskFactors('aadhar_card')
+      }
+    }
+
+    const hasPanSignal =
+      lowerKeywords.includes('pan') ||
+      lowerKeywords.includes('income tax') ||
+      lowerKeywords.includes('permanent account number') ||
+      lowerKeywords.includes('nsdl') ||
+      textAnalysis.patterns.some(pattern => pattern.source === '[A-Z]\\d{7}' || pattern.source === 'P\\d{7}')
+
+    if (hasPanSignal) {
+      return {
+        type: 'pan_card',
+        confidence: 0.95,
+        expectedFields: this.documentPatterns.pan_card.expectedFields,
+        verificationRules: this.documentPatterns.pan_card.verificationRules,
+        riskFactors: this.getRiskFactors('pan_card')
+      }
+    }
+
+    const hasDrivingLicenseSignal =
+      lowerKeywords.includes('driving licence') ||
+      lowerKeywords.includes('driving license') ||
+      lowerKeywords.includes('transport') ||
+      lowerKeywords.includes('vehicle') ||
+      textAnalysis.patterns.some(pattern => pattern.source === '[A-Z]{2}\\d{13}' || pattern.source === 'DL\\d+')
+
+    if (hasDrivingLicenseSignal) {
+      return {
+        type: 'driving_license',
+        confidence: 0.9,
+        expectedFields: this.documentPatterns.driving_license.expectedFields,
+        verificationRules: this.documentPatterns.driving_license.verificationRules,
+        riskFactors: this.getRiskFactors('driving_license')
+      }
+    }
+
     let bestMatch: DocumentClassification = this.getUnknownClassification()
     let highestConfidence = 0
     
