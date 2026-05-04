@@ -180,15 +180,18 @@ export function Dashboard({ analysisData }: DashboardProps) {
     // Subscribe to real-time updates
     const unsubscribeStats = dataService.subscribe('stats_updated', (data) => {
       console.log('[Dashboard] Received stats_updated:', data)
-      setRealTimeStats(data)
+      // Force React to detect change by creating new object reference
+      setRealTimeStats({...data})
     })
     const unsubscribeActivity = dataService.subscribe('activity_updated', (incoming: RecentActivity[]) => {
       console.log('[Dashboard] Received activity_updated:', incoming?.length, 'items')
-      setRecentActivity(mergeActivity(Array.isArray(incoming) ? incoming : []))
+      // Force React to detect change with new array reference
+      setRecentActivity(mergeActivity(Array.isArray(incoming) ? [...incoming] : []))
     })
     const unsubscribeHealth = dataService.subscribe('health_updated', (data) => {
       console.log('[Dashboard] Received health_updated:', data)
-      setSystemHealth(data)
+      // Force React to detect change by creating new object reference
+      setSystemHealth({...data})
     })
 
     // Listen for user activities to trigger dashboard updates
