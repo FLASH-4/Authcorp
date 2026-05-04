@@ -557,6 +557,18 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
         }
       }
 
+      const buildAadhaarPhotoRegion = (source: 'vision' | 'fallback' | 'simulated') => ({
+        x: 13,
+        y: 24,
+        width: 25,
+        height: 33,
+        confidence: 0.92,
+        type: 'copy_move',
+        source,
+      })
+
+      const isAadhaarDocument = classification.type === 'aadhar_card' || visionResult?.documentType === 'aadhaar_card' || visionResult?.documentType === 'aadhar_card'
+
       const buildDynamicHeatmapRegions = (count: number) => {
         const rand = createSeededRandom(
           `${document.id}:${document.filename}:${classification.type}:${authScore.toFixed(2)}:${document.contentFingerprint || 'no-fingerprint'}:${sameTypeReference?.contentFingerprint || 'no-reference'}`
@@ -679,14 +691,30 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           // Show vision-detected regions if available; tag each region with its source
           suspiciousRegions: (() => {
             if (visionResult?.heatmapRegions && visionResult.heatmapRegions.length > 0) {
-              return visionResult.heatmapRegions.slice(0, 6).map((r: any) => ({ ...r, source: 'vision' }))
+              const regions = visionResult.heatmapRegions.slice(0, 6).map((r: any) => ({ ...r, source: 'vision' }))
+              if (isAadhaarDocument && ['tampered', 'forged', 'ai-generated'].includes(normalizedVisionCategory)) {
+                const photoRegion = buildAadhaarPhotoRegion('vision')
+                const hasPhotoRegion = regions.some((r: any) => {
+                  const right = Number(r?.x || 0) + Number(r?.width || 0)
+                  const bottom = Number(r?.y || 0) + Number(r?.height || 0)
+                  return Number(r?.x || 0) <= 38 && right >= 14 && Number(r?.y || 0) <= 60 && bottom >= 18
+                })
+                return hasPhotoRegion ? regions : [photoRegion, ...regions.slice(0, 5)]
+              }
+              return regions
             }
 
             if (visionResult && ['ai-generated', 'tampered', 'forged'].includes(normalizedVisionCategory)) {
+              if (isAadhaarDocument) {
+                return [buildAadhaarPhotoRegion('fallback')]
+              }
               return fallbackHeatmapRegions.map((r: any) => ({ ...r, source: 'fallback' }))
             }
 
             if (!visionResult && (isManipulated || sessionComparisonSuspect)) {
+              if (isAadhaarDocument) {
+                return [buildAadhaarPhotoRegion('simulated')]
+              }
               return simulatedManipulationRegions.map((r: any) => ({ ...r, source: 'simulated' }))
             }
 
