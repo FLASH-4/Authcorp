@@ -233,8 +233,9 @@ export default function LiveScannerPage() {
         setCapturedFrame(latest.previewUrl)
       }
 
-      const auth = latest.results?.authenticity || {}
-      const risk = latest.results?.riskIntelligence || {}
+      const auth = (latest.results?.authenticity ?? {}) as any
+      const risk = (latest.results?.riskIntelligence ?? {}) as any
+      const resAny = (latest.results ?? {}) as any
 
       const restored: ScanResult = {
         authenticity: {
@@ -251,7 +252,7 @@ export default function LiveScannerPage() {
           : auth.score > 40
           ? 'Flag for manual review. Some inconsistencies detected.'
           : 'Reject document. High-confidence manipulation detected.',
-        processingTime: latest.results?.processingTime ?? 1.2,
+        processingTime: resAny.processingTime ?? 1.2,
       }
 
       setResult(restored)
