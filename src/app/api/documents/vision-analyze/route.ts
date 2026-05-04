@@ -214,7 +214,7 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       // ========== CRITICAL: DETECT PHOTOS BY FILENAME ==========
       // Check if filename indicates this is a photo/portrait, not a document
       const normalizedFilename = String(filename || '').toLowerCase()
-      const photoHints = ['profile', 'pic', 'photo', 'portrait', 'selfie', 'face', 'linkedin', 'facebook', 'headshot', 'avatar']
+      const photoHints = ['profile', 'pic', 'photo', 'portrait', 'selfie', 'face', 'linkedin', 'facebook', 'headshot', 'avatar', 'image', 'ai', 'tampered', 'test', 'sample', 'generated', 'screenshot']
       const isPhotoByFilename = photoHints.some((hint) => normalizedFilename.includes(hint))
 
       if (isPhotoByFilename) {
@@ -389,7 +389,7 @@ function generateHeuristicAnalysis(filename?: string) {
   const isAadhaarFilename = normalizedFilename.includes('aadhaar') || normalizedFilename.includes('aadhar')
   
   // ========== DETECT PHOTOS ==========
-  const photoHints = ['profile', 'pic', 'photo', 'portrait', 'selfie', 'face', 'linkedin', 'facebook', 'headshot', 'avatar']
+  const photoHints = ['profile', 'pic', 'photo', 'portrait', 'selfie', 'face', 'linkedin', 'facebook', 'headshot', 'avatar', 'image', 'ai', 'tampered', 'test', 'sample', 'generated', 'screenshot']
   const isPhotoFilename = photoHints.some((hint) => normalizedFilename.includes(hint))
 
   if (isPhotoFilename) {
