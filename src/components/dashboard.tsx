@@ -187,25 +187,37 @@ export function Dashboard({ analysisData }: DashboardProps) {
 
     // Subscribe to real-time updates
     const unsubscribeStats = dataService.subscribe('stats_updated', (data) => {
-      console.log('[Dashboard] Received stats_updated:', data)
-      // Force synchronous React update
-      flushSync(() => {
-        setRealTimeStats({...data})
-      })
+      try {
+        console.log('[Dashboard] Received stats_updated:', data)
+        // Force synchronous React update
+        flushSync(() => {
+          setRealTimeStats({...data})
+        })
+      } catch (err) {
+        console.error('[Dashboard] Error updating stats:', err)
+      }
     })
     const unsubscribeActivity = dataService.subscribe('activity_updated', (incoming: RecentActivity[]) => {
-      console.log('[Dashboard] Received activity_updated:', incoming?.length, 'items')
-      // Force synchronous React update
-      flushSync(() => {
-        setRecentActivity(mergeActivity(Array.isArray(incoming) ? [...incoming] : []))
-      })
+      try {
+        console.log('[Dashboard] Received activity_updated:', incoming?.length, 'items')
+        // Force synchronous React update
+        flushSync(() => {
+          setRecentActivity(mergeActivity(Array.isArray(incoming) ? [...incoming] : []))
+        })
+      } catch (err) {
+        console.error('[Dashboard] Error updating activity:', err)
+      }
     })
     const unsubscribeHealth = dataService.subscribe('health_updated', (data) => {
-      console.log('[Dashboard] Received health_updated:', data)
-      // Force synchronous React update
-      flushSync(() => {
-        setSystemHealth({...data})
-      })
+      try {
+        console.log('[Dashboard] Received health_updated:', data)
+        // Force synchronous React update
+        flushSync(() => {
+          setSystemHealth({...data})
+        })
+      } catch (err) {
+        console.error('[Dashboard] Error updating health:', err)
+      }
     })
 
     // Listen for user activities to trigger dashboard updates
