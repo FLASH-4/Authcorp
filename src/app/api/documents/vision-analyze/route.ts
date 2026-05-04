@@ -16,87 +16,124 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY?.trim()
     if (!apiKey) return NextResponse.json(generateHeuristicAnalysis(filename))
 
-    const prompt = `You are a forensic document examiner AI with expertise in detecting forged, tampered, and AI-generated documents.
+    const prompt = `You are an expert forensic document examiner specializing in Indian government ID documents.
 
-STEP 1 — IDENTIFY THE DOCUMENT TYPE:
-Look carefully at the image. Identify what it is by these EXACT markers:
+=== CRITICAL: DOCUMENT TYPE IDENTIFICATION ===
 
-**FIRST RULE: Check for MRZ (Machine Readable Zone)**
-- If there are 2 lines of alphanumeric text at the BOTTOM of the document → PASSPORT
-- If NO MRZ lines → NOT a passport, look for other markers
+Your PRIMARY task is to correctly identify the document type. Use this EXACT decision tree:
 
-**AADHAAR_CARD indicators (NEVER confuse with Passport):**
+STEP 1: Check for MRZ (Machine Readable Zone)
+- MRZ = 2 lines of small alphanumeric text at BOTTOM edge → PASSPORT (stop here)
+- NO MRZ = continue to step 2
+
+STEP 2: Check for DRIVING LICENSE specific markers (check ALL)
+- Text contains "Driving License" OR "Driving Licence" OR "DL" prominently
+- Text contains "License Number" OR "DL Number" OR "DLN"
+- Text contains "Vehicle Class" with codes like "LMV", "HMV", "HGMV", etc.
+- Text contains "Valid From" and "Valid Upto" dates
+- Text contains "Transport Authority" OR "RTO" OR "Motor Vehicles Act"
+- Text contains "Address" and vehicle-related fields
+- Photo/portrait is usually small (≤30% of card)
+→ IF 3+ markers present: DRIVING_LICENSE (stop here)
+
+STEP 3: Check for AADHAAR CARD specific markers (check ALL)
+- Text contains "AADHAAR" OR "आधार" (Hindi)
+- Text contains "UIDAI" OR "Unique Identification Authority"
+- Text contains "Government of India" + "UIDAI" (NOT just RTO)
 - 12-digit number in format XXXX XXXX XXXX
-- UIDAI (Unique Identification Authority of India) logo or text
-- "Government of India" text
-- Blue/saffron/green color scheme (Indian tricolor)
-- Portrait photo panel (usually upper-left or center)
-- Hologram or security features
-- NO MRZ lines (crucial difference from passport)
+- Card color: Blue background with tricolor stripe (saffron/white/green)
+- Hologram visible (security feature)
+- Large portrait photo (30-50% of card, usually upper-left or center)
+- Both English AND Hindi text present
+→ IF 4+ markers present: AADHAAR_CARD (stop here)
 
-**PASSPORT indicators:**
-- Machine Readable Zone (MRZ) = 2 lines of small alphanumeric text at the BOTTOM
+STEP 4: Check for PAN CARD specific markers
+- Text contains "PAN" or "Permanent Account Number"
+- Text contains "Income Tax"
+- 10-character alphanumeric code format: AAAAA0000A
+- Name, date of birth, and address fields
+- Usually B&W card
+→ IF 3+ markers: PAN_CARD (stop here)
+
+STEP 5: Check for PASSPORT markers
 - "PASSPORT" word visible
 - Country name at top
-- MRZ is the key differentiator
+- MRZ lines at bottom (2 rows of 44 chars each)
+→ IF present: PASSPORT (stop here)
 
-**Other types:**
-- "pan_card" — Indian tax card with 10-char alphanumeric PAN, Income Tax India text
-- "driving_license" — vehicle classes, transport authority
-- "resume" — work experience, education sections
-- "certificate" — academic or professional certificate  
-- "bank_document" — bank statement, cheque
-- "photo" — just a selfie or person photo, NOT a document
-- "unknown" — anything else
+STEP 6: Check for PHOTO only (NOT a document)
+- Just a person's face/selfie
+- No text, no ID fields, no security features
+- No borders or official document layout
+→ IF true: "photo"
 
-**CRITICAL DECISION TREE:**
-1. Do you see MRZ lines at bottom? → PASSPORT
-2. Do you see UIDAI logo + 12-digit number + Government of India? → AADHAAR_CARD
-3. Do you see Government of India + portrait + NO MRZ? → AADHAAR_CARD
-4. Otherwise check other markers above
+STEP 7: Otherwise
+→ "unknown"
 
-STEP 2 — EXAMINE FOR FORGERY:
-Check these specific things:
-- Fonts: Are they consistent throughout? Mixed fonts = tampered
-- Colors: Are there color mismatches, patches, or inconsistent backgrounds?
-- Text alignment: Is text properly aligned or does some look pasted?
-- Borders/patterns: Are security patterns (guilloche, microprint) complete and consistent?
-- Photo area: Does the photo look cut-paste or digitally inserted?
-- QR code: Is there a QR code and does it look genuine?
-- Holograms/watermarks: Are security features present and consistent?
-- For Aadhaar specifically: Check for UIDAI logo, proper format "XXXX XXXX XXXX", correct fonts (Noto Sans), blue color scheme
-- For resume/CV: These are NOT security documents — they should score high (75-90%) unless they contain forged credentials
+=== CRITICAL DISTINCTIONS ===
 
-STEP 3 — MARK SUSPICIOUS REGIONS:
-For EACH visible area of concern, mark a rectangle around it with coordinates as PERCENTAGES (0-100).
-Be SPECIFIC and mark ACTUAL suspicious areas you can see:
-- For Aadhaar cards, pay special attention to the portrait/photo panel. If the person's photo looks pasted, swapped, or digitally replaced, mark ONLY the photo panel region.
-- If the photo looks pasted/different: mark the photo area
-- If text looks edited: mark the text
-- If colors don't match: mark the mismatched area  
-- If fonts are inconsistent: mark those words/sections
-- If security features are missing or damaged: mark those areas
+**AADHAAR vs DRIVING LICENSE confusion:**
+- AADHAAR: Blue card, UIDAI logo, 12-digit Aadhaar number, "Aadhaar" text, LARGE portrait
+- DRIVING LICENSE: Colored card (varies by state), Vehicle Classes, "DL Number", License # format, "Valid From/Upto", "Transport Authority", SMALL portrait
+- KEY: If you see "Vehicle Class" → DRIVING LICENSE. If you see "12-digit number + UIDAI" → AADHAAR
 
-Guidelines:
-- x: 0-100 (0=left, 100=right edge)
-- y: 0-100 (0=top, 100=bottom edge)
-- width: How much of image width the region spans (in percentage, e.g., 15 = 15% of width)
-- height: How much of image height the region spans (in percentage)
-- Examples: 
-  - Photo in upper-left covering 30% width, 40% height: x=5, y=5, width=30, height=40
-  - Modified text in center: x=20, y=50, width=60, height=15
+**AADHAAR vs PAN confusion:**
+- AADHAAR: Blue, 12-digit number (XXXX XXXX XXXX), UIDAI, large portrait, Hindi+English
+- PAN: Usually white/gray, 10-char code (AAAAA0000A), "Income Tax India", no large portrait, simple layout
 
-Respond ONLY with this exact JSON (no markdown, no explanation):
+=== STEP 2: EXAMINE FOR FORGERY ===
+Analyze authenticity indicators:
+- Fonts: Consistent throughout? Mixture = tampered
+- Color consistency: No patches, bleeding, or color shifts
+- Alignment: Text properly aligned, not rotated or pasted
+- Security features: Holograms, watermarks, microprint all intact
+- Photo quality: No digital artifacts, paste edges, or swapping signs
+- Borders: Clean, consistent, not damaged
+- Text clarity: Sharp, readable, not blurred or pixelated
+
+For AADHAAR specifically:
+- UIDAI hologram present and intact
+- Blue background color pure and consistent
+- Tricolor stripe visible at top
+- Portrait looks naturally printed (not pasted)
+- Noto Sans font used correctly
+- 12-digit number clearly visible
+
+For DRIVING LICENSE specifically:
+- State emblem/crest clear
+- License number clearly legible
+- Vehicle class icons or text legible
+- Dates correctly formatted
+- Photo appears naturally embedded
+
+For PAN CARD specifically:
+- "Income Tax India" logo clear
+- PAN code correctly formatted
+- Name and DOB properly printed
+
+=== STEP 3: MARK SUSPICIOUS REGIONS ===
+For EACH suspicious area, create a box with coordinates as PERCENTAGES (0-100):
+- x: horizontal position (0=left edge, 100=right edge)
+- y: vertical position (0=top edge, 100=bottom edge)
+- width: horizontal span in percentage (e.g., 30 = 30% of image width)
+- height: vertical span in percentage (e.g., 40 = 40% of image height)
+
+Examples:
+- Photo area (upper-left, 30% wide, 40% tall): {"x": 5, "y": 5, "width": 30, "height": 40}
+- Modified text in center: {"x": 25, "y": 50, "width": 50, "height": 10}
+
+=== RESPONSE FORMAT ===
+Respond ONLY with valid JSON (no markdown, no backticks, no explanation):
 {
-  "documentType": "<type from step 1>",
-  "authenticityScore": <0-100, where 100=perfectly authentic>,
-  "confidence": <0-100, your confidence in this assessment>,
+  "documentType": "<aadhaar_card|driving_license|pan_card|passport|photo|unknown>",
+  "authenticityScore": <0-100>,
+  "confidence": <0-100>,
   "category": <"authentic"|"tampered"|"forged"|"ai-generated"|"not-a-document">,
   "isManipulated": <true|false>,
   "reasoning": [
-    "<specific observation 1 about THIS document>",
-    "<specific observation 2>",
-    "<specific observation 3>"
+    "<observation 1>",
+    "<observation 2>",
+    "<observation 3>"
   ],
   "heatmapRegions": [
     {
@@ -164,6 +201,17 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       const clean = text.replace(/```json\n?|\n?```/g, '').trim()
       const parsed = JSON.parse(clean)
 
+      // CRITICAL: If we detect UIDAI or 12-digit Aadhaar number format, it's AADHAAR, never Driving License
+      if ((parsed.documentType === 'driving_license' || parsed.documentType === 'unknown') &&
+          (parsed.extractedText?.toLowerCase().includes('uidai') ||
+           parsed.extractedText?.toLowerCase().includes('aadhaar') ||
+           parsed.extractedText?.toLowerCase().includes('आधार') ||
+           /\d{4}\s\d{4}\s\d{4}/.test(parsed.extractedText || '') || // 12-digit format XXXX XXXX XXXX
+           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('uidai') || r?.toLowerCase().includes('aadhaar') || /\d{4}\s\d{4}\s\d{4}/.test(r)))) {
+        console.log('CORRECTING to aadhaar_card: Detected UIDAI or 12-digit Aadhaar number')
+        parsed.documentType = 'aadhaar_card'
+      }
+
       // Safety check: if Vision API says passport but text mentions Aadhaar/UIDAI/Government of India, correct it
       if (parsed.documentType === 'passport' && 
           (parsed.extractedText?.toLowerCase().includes('aadhaar') || 
@@ -189,7 +237,7 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       // Also check if reasoning strongly suggests Aadhaar features
       if (parsed.documentType === 'passport' && parsed.reasoning) {
         const reasoning = parsed.reasoning.join(' ').toLowerCase()
-        if ((reasoning.includes('12-digit') || reasoning.includes('uidai logo') || reasoning.includes('aadhar')) && !reasoning.includes('mrz')) {
+        if ((reasoning.includes('12-digit') || reasoning.includes('uidai logo') || reasoning.includes('aadhar') || reasoning.includes('aadhaar')) && !reasoning.includes('mrz')) {
           console.log('Correcting passport → aadhaar_card based on reasoning features')
           parsed.documentType = 'aadhaar_card'
         }
@@ -197,20 +245,35 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
 
       // Final comprehensive check: combine all text and check for Aadhaar/Driving License markers
       const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
+      
+      // FINAL CRITICAL CHECK: If any Aadhaar indicator present, must be aadhaar_card
+      if ((parsed.documentType === 'driving_license' || parsed.documentType === 'unknown' || parsed.documentType === 'passport') && 
+          (allText.includes('uidai') || allText.includes('aadhaar') || /\d{4}\s\d{4}\s\d{4}/.test(allText))) {
+        console.log('FINAL: Correcting to aadhaar_card (UIDAI/Aadhaar marker detected)')
+        parsed.documentType = 'aadhaar_card'
+      }
+      
       if (parsed.documentType === 'passport' && 
           (allText.includes('aadhar') || allText.includes('uidai') || (allText.includes('government of india') && !allText.includes('mrz')))) {
         console.log('Correcting passport → aadhaar_card (final comprehensive check)')
         parsed.documentType = 'aadhaar_card'
       }
       
-      // Final check for driving license
-      if (parsed.documentType === 'passport' &&
+      // Final check for driving license (only if NOT aadhaar markers present)
+      if (parsed.documentType === 'passport' && !allText.includes('uidai') && !allText.includes('aadhaar') &&
           (allText.includes('driving license') || allText.includes('driving licence') || 
            (allText.includes('vehicle') && allText.includes('class')) ||
-           (allText.includes('transport') && allText.includes('authority')) ||
+           (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai')) ||
            allText.includes('dl number'))) {
         console.log('Correcting passport → driving_license (final comprehensive check)')
         parsed.documentType = 'driving_license'
+      }
+
+      // CRITICAL: Never detect Aadhaar as Driving License
+      if (parsed.documentType === 'driving_license' &&
+          (allText.includes('uidai') || allText.includes('aadhaar') || /\d{4}\s\d{4}\s\d{4}/.test(allText))) {
+        console.log('CRITICAL: Aadhaar was incorrectly classified as Driving License - correcting')
+        parsed.documentType = 'aadhaar_card'
       }
 
       // Check for PAN card misclassified as passport/unknown
