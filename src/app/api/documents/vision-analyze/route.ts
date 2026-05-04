@@ -20,13 +20,23 @@ export async function POST(req: NextRequest) {
 
 === CRITICAL: DOCUMENT TYPE IDENTIFICATION ===
 
-Your PRIMARY task is to correctly identify the document type. Use this EXACT decision tree:
+Your PRIMARY task is to correctly identify the document type. Use this EXACT decision tree (CHECK IN THIS ORDER):
 
 STEP 1: Check for MRZ (Machine Readable Zone)
 - MRZ = 2 lines of small alphanumeric text at BOTTOM edge → PASSPORT (stop here)
 - NO MRZ = continue to step 2
 
-STEP 2: Check for DRIVING LICENSE specific markers (check ALL)
+STEP 2: Check for AADHAAR CARD specific markers (CHECK FIRST BEFORE DRIVING LICENSE!)
+- Text contains "AADHAAR" OR "आधार" (Hindi) → STOP, THIS IS AADHAAR
+- Text contains "UIDAI" OR "Unique Identification Authority" → STOP, THIS IS AADHAAR
+- 12-digit number in format XXXX XXXX XXXX → STOP, THIS IS AADHAAR
+- Card color: Blue background with tricolor stripe (saffron/white/green) → AADHAAR
+- Hologram visible (security feature typical of Aadhaar) → AADHAAR
+- Large portrait photo (30-50% of card, usually upper-left or center) → AADHAAR
+- Both English AND Hindi text present → AADHAAR
+→ IF ANY of these markers present: AADHAAR_CARD (do NOT continue to step 3)
+
+STEP 3: Check for DRIVING LICENSE specific markers (ONLY IF NOT AADHAAR)
 - Text contains "Driving License" OR "Driving Licence" OR "DL" prominently
 - Text contains "License Number" OR "DL Number" OR "DLN"
 - Text contains "Vehicle Class" with codes like "LMV", "HMV", "HGMV", etc.
@@ -34,18 +44,7 @@ STEP 2: Check for DRIVING LICENSE specific markers (check ALL)
 - Text contains "Transport Authority" OR "RTO" OR "Motor Vehicles Act"
 - Text contains "Address" and vehicle-related fields
 - Photo/portrait is usually small (≤30% of card)
-→ IF 3+ markers present: DRIVING_LICENSE (stop here)
-
-STEP 3: Check for AADHAAR CARD specific markers (check ALL)
-- Text contains "AADHAAR" OR "आधार" (Hindi)
-- Text contains "UIDAI" OR "Unique Identification Authority"
-- Text contains "Government of India" + "UIDAI" (NOT just RTO)
-- 12-digit number in format XXXX XXXX XXXX
-- Card color: Blue background with tricolor stripe (saffron/white/green)
-- Hologram visible (security feature)
-- Large portrait photo (30-50% of card, usually upper-left or center)
-- Both English AND Hindi text present
-→ IF 4+ markers present: AADHAAR_CARD (stop here)
+→ IF 3+ markers present AND NO Aadhaar markers: DRIVING_LICENSE (stop here)
 
 STEP 4: Check for PAN CARD specific markers
 - Text contains "PAN" or "Permanent Account Number"
@@ -72,10 +71,17 @@ STEP 7: Otherwise
 
 === CRITICAL DISTINCTIONS ===
 
-**AADHAAR vs DRIVING LICENSE confusion:**
-- AADHAAR: Blue card, UIDAI logo, 12-digit Aadhaar number, "Aadhaar" text, LARGE portrait
-- DRIVING LICENSE: Colored card (varies by state), Vehicle Classes, "DL Number", License # format, "Valid From/Upto", "Transport Authority", SMALL portrait
-- KEY: If you see "Vehicle Class" → DRIVING LICENSE. If you see "12-digit number + UIDAI" → AADHAAR
+**AADHAAR CARD (DO NOT CONFUSE WITH ANYTHING ELSE):**
+- Has "AADHAAR" or "आधार" text → MUST be AADHAAR
+- Has "UIDAI" or "Unique Identification Authority" → MUST be AADHAAR
+- Has 12-digit number in XXXX XXXX XXXX format → MUST be AADHAAR
+- If you see ANY of these markers, it is DEFINITELY AADHAAR_CARD, NOT DRIVING LICENSE
+
+**AADHAAR vs DRIVING LICENSE (HOW TO TELL):**
+- AADHAAR: Blue card, UIDAI visible, 12-digit number, large portrait (30-50%), tricolor stripe, "Aadhaar" text prominently
+- DRIVING LICENSE: Various colors (red/yellow/multicolor), "Vehicle Class" field, "License Number" field, "Valid From/Upto" dates, small portrait (≤30%), "Transport Authority" text
+- NEVER confuse: If you see "UIDAI" or "12-digit number" on an Aadhaar, it is NOT a driving license
+- NEVER confuse: If you see "Vehicle Class" or "License Number", it is NOT an Aadhaar
 
 **AADHAAR vs PAN confusion:**
 - AADHAAR: Blue, 12-digit number (XXXX XXXX XXXX), UIDAI, large portrait, Hindi+English
@@ -201,91 +207,61 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       const clean = text.replace(/```json\n?|\n?```/g, '').trim()
       const parsed = JSON.parse(clean)
 
-      // CRITICAL: If we detect UIDAI or 12-digit Aadhaar number format, it's AADHAAR, never Driving License
-      if ((parsed.documentType === 'driving_license' || parsed.documentType === 'unknown') &&
-          (parsed.extractedText?.toLowerCase().includes('uidai') ||
-           parsed.extractedText?.toLowerCase().includes('aadhaar') ||
-           parsed.extractedText?.toLowerCase().includes('आधार') ||
-           /\d{4}\s\d{4}\s\d{4}/.test(parsed.extractedText || '') || // 12-digit format XXXX XXXX XXXX
-           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('uidai') || r?.toLowerCase().includes('aadhaar') || /\d{4}\s\d{4}\s\d{4}/.test(r)))) {
-        console.log('CORRECTING to aadhaar_card: Detected UIDAI or 12-digit Aadhaar number')
+      // Combine all available text for comprehensive analysis
+      const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
+      const allReasoning = (parsed.reasoning || []).join(' ').toLowerCase()
+
+      // ========== STEP 1: AADHAAR CARD CHECK (HIGHEST PRIORITY) ==========
+      // If ANY Aadhaar marker exists, it MUST be classified as aadhaar_card
+      const hasAadhaarMarker = 
+        allText.includes('uidai') ||
+        allText.includes('aadhaar') ||
+        allText.includes('आधार') ||
+        /\d{4}\s\d{4}\s\d{4}/.test(allText) || // 12-digit format XXXX XXXX XXXX
+        allReasoning.includes('uidai') ||
+        allReasoning.includes('aadhaar') ||
+        allReasoning.includes('आधार') ||
+        allReasoning.includes('12-digit')
+
+      if (hasAadhaarMarker) {
+        console.log('✓ AADHAAR CARD DETECTED - Setting documentType to aadhaar_card')
         parsed.documentType = 'aadhaar_card'
       }
 
-      // Safety check: if Vision API says passport but text mentions Aadhaar/UIDAI/Government of India, correct it
-      if (parsed.documentType === 'passport' && 
-          (parsed.extractedText?.toLowerCase().includes('aadhaar') || 
-           parsed.extractedText?.toLowerCase().includes('uidai') ||
-           parsed.extractedText?.toLowerCase().includes('government of india') ||
-           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('aadhaar') || r?.toLowerCase().includes('uidai') || r?.toLowerCase().includes('government of india')))) {
-        console.log('Correcting passport → aadhaar_card based on extracted content')
-        parsed.documentType = 'aadhaar_card'
-      }
-      
-      // Check if it's a driving license being misclassified as passport
-      if (parsed.documentType === 'passport' &&
-          (parsed.extractedText?.toLowerCase().includes('driving') ||
-           parsed.extractedText?.toLowerCase().includes('vehicle class') ||
-           parsed.extractedText?.toLowerCase().includes('transport') ||
-           parsed.extractedText?.toLowerCase().includes('license number') ||
-           parsed.extractedText?.toLowerCase().includes('dl number') ||
-           parsed.reasoning?.some((r: string) => r?.toLowerCase().includes('driving') || r?.toLowerCase().includes('vehicle class') || r?.toLowerCase().includes('transport authority')))) {
-        console.log('Correcting passport → driving_license based on extracted content')
-        parsed.documentType = 'driving_license'
-      }
-      
-      // Also check if reasoning strongly suggests Aadhaar features
-      if (parsed.documentType === 'passport' && parsed.reasoning) {
-        const reasoning = parsed.reasoning.join(' ').toLowerCase()
-        if ((reasoning.includes('12-digit') || reasoning.includes('uidai logo') || reasoning.includes('aadhar') || reasoning.includes('aadhaar')) && !reasoning.includes('mrz')) {
-          console.log('Correcting passport → aadhaar_card based on reasoning features')
-          parsed.documentType = 'aadhaar_card'
+      // ========== STEP 2: DRIVING LICENSE CHECK (if NOT Aadhaar) ==========
+      // Only check for driving license if we didn't already detect Aadhaar
+      else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
+        const hasDrivingLicenseMarker =
+          allText.includes('driving license') ||
+          allText.includes('driving licence') ||
+          allText.includes('vehicle class') ||
+          (allText.includes('license number') && !allText.includes('uidai')) ||
+          (allText.includes('dl number') && !allText.includes('uidai')) ||
+          (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai')) ||
+          (allText.includes('rto') && !allText.includes('uidai'))
+
+        if (hasDrivingLicenseMarker) {
+          console.log('✓ DRIVING LICENSE DETECTED - Setting documentType to driving_license')
+          parsed.documentType = 'driving_license'
         }
       }
 
-      // Final comprehensive check: combine all text and check for Aadhaar/Driving License markers
-      const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''}`.toLowerCase()
-      
-      // FINAL CRITICAL CHECK: If any Aadhaar indicator present, must be aadhaar_card
-      if ((parsed.documentType === 'driving_license' || parsed.documentType === 'unknown' || parsed.documentType === 'passport') && 
-          (allText.includes('uidai') || allText.includes('aadhaar') || /\d{4}\s\d{4}\s\d{4}/.test(allText))) {
-        console.log('FINAL: Correcting to aadhaar_card (UIDAI/Aadhaar marker detected)')
-        parsed.documentType = 'aadhaar_card'
-      }
-      
-      if (parsed.documentType === 'passport' && 
-          (allText.includes('aadhar') || allText.includes('uidai') || (allText.includes('government of india') && !allText.includes('mrz')))) {
-        console.log('Correcting passport → aadhaar_card (final comprehensive check)')
-        parsed.documentType = 'aadhaar_card'
-      }
-      
-      // Final check for driving license (only if NOT aadhaar markers present)
-      if (parsed.documentType === 'passport' && !allText.includes('uidai') && !allText.includes('aadhaar') &&
-          (allText.includes('driving license') || allText.includes('driving licence') || 
-           (allText.includes('vehicle') && allText.includes('class')) ||
-           (allText.includes('transport') && allText.includes('authority') && !allText.includes('uidai')) ||
-           allText.includes('dl number'))) {
-        console.log('Correcting passport → driving_license (final comprehensive check)')
-        parsed.documentType = 'driving_license'
+      // ========== STEP 3: PAN CARD CHECK (if NOT Aadhaar or Driving License) ==========
+      if (parsed.documentType === 'unknown' || parsed.documentType === 'passport') {
+        const hasPanMarker =
+          allText.includes('permanent account number') ||
+          allText.includes('pan card') ||
+          (allText.includes('pan') && allText.includes('income tax')) ||
+          /[a-z]{5}[0-9]{4}[a-z]{1}/.test(allText)
+
+        if (hasPanMarker) {
+          console.log('✓ PAN CARD DETECTED - Setting documentType to pan_card')
+          parsed.documentType = 'pan_card'
+        }
       }
 
-      // CRITICAL: Never detect Aadhaar as Driving License
-      if (parsed.documentType === 'driving_license' &&
-          (allText.includes('uidai') || allText.includes('aadhaar') || /\d{4}\s\d{4}\s\d{4}/.test(allText))) {
-        console.log('CRITICAL: Aadhaar was incorrectly classified as Driving License - correcting')
-        parsed.documentType = 'aadhaar_card'
-      }
-
-      // Check for PAN card misclassified as passport/unknown
-      if ((parsed.documentType === 'passport' || parsed.documentType === 'unknown') &&
-          (allText.includes('pan') || 
-           allText.includes('income tax') || 
-           (allText.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/) && allText.includes('india')) ||
-           allText.includes('pan number') ||
-           allText.includes('permanent account number'))) {
-        console.log('Correcting to pan_card based on PAN patterns')
-        parsed.documentType = 'pan_card'
-      }
+      // ========== STEP 4: PASSPORT/PHOTO/OTHER CHECKS ==========
+      // No additional corrections needed - Aadhaar and DL already handled in steps 1-2
 
       // Ensure all heatmap regions are in 0-100 percentage format
       const normalizedRegions = (Array.isArray(parsed.heatmapRegions) ? parsed.heatmapRegions : [])
