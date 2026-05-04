@@ -267,6 +267,15 @@ class DataService {
     
     this.subscribers.get(event)!.push(callback)
     
+    // Emit initial data immediately when subscribing (don't wait for next interval)
+    if (event === 'stats_updated') {
+      this.getRealTimeStats().then(stats => callback(stats)).catch(console.error)
+    } else if (event === 'activity_updated') {
+      this.getRecentActivity().then(activity => callback(activity)).catch(console.error)
+    } else if (event === 'health_updated') {
+      this.getSystemHealth().then(health => callback(health)).catch(console.error)
+    }
+    
     // Return unsubscribe function
     return () => {
       const callbacks = this.subscribers.get(event)
