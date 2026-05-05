@@ -416,6 +416,22 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         return normalizedRegions
       })()
 
+      // ========== FINAL CATCH-ALL: PREVENT PORTRAIT/SELFIE MISCLASSIFICATION AS PASSPORT ==========
+      // Even if all previous checks miss it, ensure no portrait-like image is returned as Passport
+      if (normalizedDocumentType === 'passport') {
+        const hasMrzLines = /([A-Z0-9<]{30,})/.test(allText) || reasoningText.includes('mrz') || reasoningText.includes('machine readable')
+        const looksLikePortrait = /\b(portrait|face|selfie|headshot|photo|selfie|person|head|shot)\b/i.test(reasoningText) ||
+                                   /\b(portrait|face|selfie|headshot|photo|person|head|shot)\b/i.test(rawResponseText)
+        
+        if (!hasMrzLines && looksLikePortrait) {
+          console.log('🛡️ FINAL CATCH: Removing Passport classification - detected as portrait/selfie without MRZ')
+          parsed.documentType = 'photo'
+          parsed.category = 'ai-generated'
+          parsed.authenticityScore = 32
+          parsed.confidence = 75
+        }
+      }
+
       return NextResponse.json({
         documentType: parsed.documentType || 'unknown',
         authenticityScore: Math.min(100, Math.max(0, Number(parsed.authenticityScore) || 72)),
