@@ -435,7 +435,7 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
             
             // ========== URGENT: PASSPORT SANITY CHECK ==========
             // If Vision API returns passport, VERIFY it has reasoning that justifies it
-            if (String(visionResult?.documentType || '').toLowerCase() === 'passport') {
+            if (String(visionResult?.documentType || '').toLowerCase() === 'photo') {
               const reasoning = (visionResult?.reasoning || []).join(' ').toLowerCase()
               const hasMrz = reasoning.includes('mrz') || reasoning.includes('machine readable')
               const looksLikePhoto = /\b(portrait|face|selfie|headshot|person|head)\b/i.test(reasoning)
