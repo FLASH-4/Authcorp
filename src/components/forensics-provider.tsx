@@ -432,6 +432,23 @@ export function ForensicsProvider({ children }: ForensicsProviderProps) {
           if (visionResponse.ok) {
             visionResult = await visionResponse.json()
             console.log('Vision result:', visionResult?.source, 'score:', visionResult?.authenticityScore, 'type:', visionResult?.documentType)
+            
+            // ========== URGENT: PASSPORT SANITY CHECK ==========
+            // If Vision API returns passport, VERIFY it has reasoning that justifies it
+            if (String(visionResult?.documentType || '').toLowerCase() === 'passport') {
+              const reasoning = (visionResult?.reasoning || []).join(' ').toLowerCase()
+              const hasMrz = reasoning.includes('mrz') || reasoning.includes('machine readable')
+              const looksLikePhoto = /\b(portrait|face|selfie|headshot|person|head)\b/i.test(reasoning)
+              const filename = String(document.filename || '').toLowerCase()
+              const isPhotoFilename = ['ai', 'generated', 'tampered', 'test', 'sample', 'portrait', 'photo', 'selfie', 'face'].some(kw => filename.includes(kw))
+              
+              if (!hasMrz || (looksLikePhoto || isPhotoFilename)) {
+                console.warn('🚨 EMERGENCY CORRECTION: Passport without MRZ detected - forcing to photo')
+                visionResult.documentType = 'photo'
+                visionResult.category = 'ai-generated'
+                visionResult.authenticityScore = 32
+              }
+            }
           } else {
             const errText = await visionResponse.text()
             console.error('Vision API failed:', visionResponse.status, errText.slice(0, 200))

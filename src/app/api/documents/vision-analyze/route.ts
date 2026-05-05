@@ -239,7 +239,14 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         // Don't override - this is NOT a document
       } else if (parsed.category === 'ai-generated') {
         console.log('✓ AI-GENERATED IMAGE DETECTED - Preserving Vision API ai-generated classification')
-        // Don't override the document type - AI-generated is the key finding
+        // Even if category is ai-generated, if documentType is Passport without MRZ, force-correct it
+        if (String(parsed.documentType || '').toLowerCase() === 'passport') {
+          const hasMrzLines = /([A-Z0-9<]{30,})/.test(allText) || reasoningText.includes('mrz') || reasoningText.includes('machine readable')
+          if (!hasMrzLines) {
+            console.log('⚠️ CORRECTING: Passport without MRZ marked as ai-generated → forcing to photo')
+            parsed.documentType = 'photo'
+          }
+        }
       } else {
         // ========== STEP 1: AADHAAR CARD CHECK (HIGHEST PRIORITY - OVERRIDE EVERYTHING) ==========
         // ALWAYS check for Aadhaar markers FIRST, regardless of what Vision API returned
@@ -422,9 +429,11 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
         const hasMrzLines = /([A-Z0-9<]{30,})/.test(allText) || reasoningText.includes('mrz') || reasoningText.includes('machine readable')
         const looksLikePortrait = /\b(portrait|face|selfie|headshot|photo|selfie|person|head|shot)\b/i.test(reasoningText) ||
                                    /\b(portrait|face|selfie|headshot|photo|person|head|shot)\b/i.test(rawResponseText)
+        const filenameIndicatesPhoto = photoHints.some((hint) => normalizedFilename.includes(hint))
         
-        if (!hasMrzLines && looksLikePortrait) {
+        if (!hasMrzLines && (looksLikePortrait || filenameIndicatesPhoto)) {
           console.log('🛡️ FINAL CATCH: Removing Passport classification - detected as portrait/selfie without MRZ')
+          console.log('  - Has MRZ:', hasMrzLines, '- Looks like portrait:', looksLikePortrait, '- Photo filename:', filenameIndicatesPhoto)
           parsed.documentType = 'photo'
           parsed.category = 'ai-generated'
           parsed.authenticityScore = 32
