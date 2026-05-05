@@ -211,6 +211,11 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
       // Combine all available text for comprehensive analysis
       const allText = `${parsed.extractedText || ''} ${(parsed.reasoning || []).join(' ')} ${parsed.metadata?.tamperingClues?.join(' ') || ''} ${rawResponseText}`.toLowerCase()
       const allReasoning = (parsed.reasoning || []).join(' ').toLowerCase()
+      const reasoningText = [
+        ...(Array.isArray(parsed.reasoning) ? parsed.reasoning : []),
+        ...(Array.isArray(parsed.metadata?.tamperingClues) ? parsed.metadata.tamperingClues : []),
+      ].join(' ').toLowerCase()
+      
       const hasExplicitTamperLanguage = /\b(forged|fake|tampered|manipulated|counterfeit|photoshopped|edited|altered|spliced|inpaint|replaced|cloned|deepfake)\b/i.test(rawResponseText)
 
       // ========== CRITICAL: DETECT PHOTOS BY FILENAME ==========
@@ -298,7 +303,17 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
             parsed.documentType = 'pan_card'
             parsed.authenticityScore = Math.max(65, Number(parsed.authenticityScore) || 65)
           }
-          // ========== STEP 3: DRIVING LICENSE CHECK (ONLY IF NOT AADHAAR OR PAN) ==========
+          // ========== STEP 3: PASSPORT CHECK (STRICT MRZ REQUIREMENT) ==========
+          else if (parsed.documentType === 'passport') {
+            const hasMrz = /([A-Z0-9<]{30,})/.test(allText) || reasoningText.includes('mrz') || reasoningText.includes('machine readable')
+            if (!hasMrz && isPhotoByFilename) {
+              console.log('⚠ MISCLASSIFIED PHOTO AS PASSPORT - Correcting to photo/ai-generated')
+              parsed.documentType = 'photo'
+              parsed.category = 'ai-generated'
+              parsed.authenticityScore = 32
+            }
+          }
+          // ========== STEP 4: DRIVING LICENSE CHECK (ONLY IF NOT AADHAAR OR PAN) ==========
           else if (parsed.documentType === 'unknown' || parsed.documentType === 'passport' || parsed.documentType === 'driving_license') {
             // FIRST: Check if this might actually be a PAN that Vision API misclassified as DL
             // If we find clear PAN markers, it's PAN, not DL
@@ -366,10 +381,6 @@ IMPORTANT: Be specific. Don't say "document looks authentic" — say WHAT you se
 
       const normalizedDocumentType = String(parsed.documentType || '').toLowerCase()
       const normalizedCategory = String(parsed.category || '').toLowerCase()
-      const reasoningText = [
-        ...(Array.isArray(parsed.reasoning) ? parsed.reasoning : []),
-        ...(Array.isArray(parsed.metadata?.tamperingClues) ? parsed.metadata.tamperingClues : []),
-      ].join(' ').toLowerCase()
       const mentionsPhotoTamper = /(photo|portrait|face|pasted|inserted|swapped|replaced|cut\s*-?paste)/i.test(reasoningText)
       const hasPhotoRegion = normalizedRegions.some((region: any) => {
         const regionRight = Number(region?.x || 0) + Number(region?.width || 0)
